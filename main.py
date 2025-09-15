@@ -6,8 +6,18 @@ import uvicorn
 
 from database import get_db, engine
 from models import Base
-from schemas import UserCreate, UserResponse, UserUpdate, ChatRequest, ChatResponse, ChatMessage, MessageTrackingResponse, HealthProfileCreate, HealthProfileUpdate, HealthProfileResponse
-from crud import create_user, get_user, get_users, update_user, delete_user, check_message_limit, increment_message_count, get_current_month_year, get_user_health_profile, create_user_health_profile, update_user_health_profile, delete_user_health_profile, get_health_profile_for_ai
+from schemas import (UserCreate, UserResponse, UserUpdate, ChatRequest, ChatResponse, ChatMessage, MessageTrackingResponse, 
+                    HealthProfileCreate, HealthProfileUpdate, HealthProfileResponse, QuestionnaireCreate, QuestionnaireUpdate, 
+                    QuestionnaireResponse, HabitTargetCreate, HabitTargetUpdate, HabitTargetResponse, HabitLogCreate, 
+                    HabitLogUpdate, HabitLogResponse, DailyProgressResponse, WeeklyProgressResponse, MonthlyProgressResponse, 
+                    FeedbackResponse)
+from crud import (create_user, get_user, get_users, update_user, delete_user, check_message_limit, increment_message_count, 
+                 get_current_month_year, get_user_health_profile, create_user_health_profile, update_user_health_profile, 
+                 delete_user_health_profile, get_health_profile_for_ai, get_user_questionnaire, create_user_questionnaire, 
+                 update_user_questionnaire, delete_user_questionnaire, get_user_habit_targets, get_habit_target, 
+                 create_habit_target, update_habit_target, delete_habit_target, get_habit_logs, get_habit_log, 
+                 create_habit_log, update_habit_log, delete_habit_log, calculate_daily_progress, calculate_weekly_progress, 
+                 calculate_monthly_progress, generate_feedback)
 from openai_service import get_openai_service
 
 # Create database tables
@@ -270,6 +280,345 @@ async def delete_health_profile(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Health profile not found")
     
     return {"message": "Health profile deleted successfully"}
+
+# Questionnaire endpoints
+@app.post("/users/{user_id}/questionnaire", response_model=QuestionnaireResponse)
+async def create_questionnaire(user_id: int, questionnaire: QuestionnaireCreate, db: Session = Depends(get_db)):
+    """Create a new questionnaire for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if questionnaire already exists
+    existing_questionnaire = get_user_questionnaire(db, user_id)
+    if existing_questionnaire:
+        raise HTTPException(status_code=400, detail="Questionnaire already exists. Use PUT to update.")
+    
+    # Create questionnaire
+    questionnaire_data = questionnaire.dict(exclude_unset=True)
+    db_questionnaire = create_user_questionnaire(db, user_id, questionnaire_data)
+    
+    return db_questionnaire
+
+@app.get("/users/{user_id}/questionnaire", response_model=QuestionnaireResponse)
+async def get_questionnaire(user_id: int, db: Session = Depends(get_db)):
+    """Get user's questionnaire."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    db_questionnaire = get_user_questionnaire(db, user_id)
+    if not db_questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    return db_questionnaire
+
+@app.put("/users/{user_id}/questionnaire", response_model=QuestionnaireResponse)
+async def update_questionnaire(user_id: int, questionnaire: QuestionnaireUpdate, db: Session = Depends(get_db)):
+    """Update user's questionnaire."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update questionnaire
+    questionnaire_data = questionnaire.dict(exclude_unset=True)
+    db_questionnaire = update_user_questionnaire(db, user_id, questionnaire_data)
+    
+    if not db_questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    return db_questionnaire
+
+@app.delete("/users/{user_id}/questionnaire")
+async def delete_questionnaire(user_id: int, db: Session = Depends(get_db)):
+    """Delete user's questionnaire."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    success = delete_user_questionnaire(db, user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    return {"message": "Questionnaire deleted successfully"}
+
+# Habit Target endpoints
+@app.post("/users/{user_id}/habit-targets", response_model=HabitTargetResponse)
+async def create_habit_target(user_id: int, habit_target: HabitTargetCreate, db: Session = Depends(get_db)):
+    """Create a new habit target for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if target already exists for this habit type
+    existing_target = get_habit_target(db, user_id, habit_target.habit_type)
+    if existing_target:
+        raise HTTPException(status_code=400, detail=f"Target already exists for habit type '{habit_target.habit_type}'. Use PUT to update.")
+    
+    # Create habit target
+    habit_target_data = habit_target.dict()
+    db_habit_target = create_habit_target(db, user_id, habit_target_data)
+    
+    return db_habit_target
+
+@app.get("/users/{user_id}/habit-targets", response_model=List[HabitTargetResponse])
+async def get_habit_targets(user_id: int, habit_type: str = None, db: Session = Depends(get_db)):
+    """Get user's habit targets."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    targets = get_user_habit_targets(db, user_id, habit_type)
+    return targets
+
+@app.get("/users/{user_id}/habit-targets/{habit_type}", response_model=HabitTargetResponse)
+async def get_habit_target_endpoint(user_id: int, habit_type: str, db: Session = Depends(get_db)):
+    """Get a specific habit target for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    target = get_habit_target(db, user_id, habit_type)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Habit target not found for type '{habit_type}'")
+    
+    return target
+
+@app.put("/users/{user_id}/habit-targets/{habit_type}", response_model=HabitTargetResponse)
+async def update_habit_target_endpoint(user_id: int, habit_type: str, habit_target: HabitTargetUpdate, db: Session = Depends(get_db)):
+    """Update a habit target for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update habit target
+    habit_target_data = habit_target.dict(exclude_unset=True)
+    db_habit_target = update_habit_target(db, user_id, habit_type, habit_target_data)
+    
+    if not db_habit_target:
+        raise HTTPException(status_code=404, detail=f"Habit target not found for type '{habit_type}'")
+    
+    return db_habit_target
+
+@app.delete("/users/{user_id}/habit-targets/{habit_type}")
+async def delete_habit_target_endpoint(user_id: int, habit_type: str, db: Session = Depends(get_db)):
+    """Delete a habit target for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    success = delete_habit_target(db, user_id, habit_type)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Habit target not found for type '{habit_type}'")
+    
+    return {"message": f"Habit target for '{habit_type}' deleted successfully"}
+
+# Habit Log endpoints
+@app.post("/users/{user_id}/habit-logs", response_model=HabitLogResponse)
+async def create_habit_log(user_id: int, habit_log: HabitLogCreate, db: Session = Depends(get_db)):
+    """Create a new habit log for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if log already exists for this date and habit type
+    existing_log = get_habit_log(db, user_id, habit_log.log_date, habit_log.habit_type)
+    if existing_log:
+        raise HTTPException(status_code=400, detail=f"Log already exists for {habit_log.habit_type} on {habit_log.log_date}. Use PUT to update.")
+    
+    # Create habit log
+    habit_log_data = habit_log.dict()
+    db_habit_log = create_habit_log(db, user_id, habit_log_data)
+    
+    return db_habit_log
+
+@app.get("/users/{user_id}/habit-logs", response_model=List[HabitLogResponse])
+async def get_habit_logs_endpoint(user_id: int, habit_type: str = None, start_date: str = None, end_date: str = None, db: Session = Depends(get_db)):
+    """Get user's habit logs with optional filters."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Parse dates if provided
+    from datetime import date
+    start_date_obj = None
+    end_date_obj = None
+    
+    if start_date:
+        try:
+            start_date_obj = date.fromisoformat(start_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format. Use YYYY-MM-DD")
+    
+    if end_date:
+        try:
+            end_date_obj = date.fromisoformat(end_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format. Use YYYY-MM-DD")
+    
+    logs = get_habit_logs(db, user_id, habit_type, start_date_obj, end_date_obj)
+    return logs
+
+@app.get("/users/{user_id}/habit-logs/{log_date}/{habit_type}", response_model=HabitLogResponse)
+async def get_habit_log_endpoint(user_id: int, log_date: str, habit_type: str, db: Session = Depends(get_db)):
+    """Get a specific habit log for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Parse date
+    from datetime import date
+    try:
+        log_date_obj = date.fromisoformat(log_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid log_date format. Use YYYY-MM-DD")
+    
+    log = get_habit_log(db, user_id, log_date_obj, habit_type)
+    if not log:
+        raise HTTPException(status_code=404, detail=f"Habit log not found for {habit_type} on {log_date}")
+    
+    return log
+
+@app.put("/users/{user_id}/habit-logs/{log_date}/{habit_type}", response_model=HabitLogResponse)
+async def update_habit_log_endpoint(user_id: int, log_date: str, habit_type: str, habit_log: HabitLogUpdate, db: Session = Depends(get_db)):
+    """Update a habit log for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Parse date
+    from datetime import date
+    try:
+        log_date_obj = date.fromisoformat(log_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid log_date format. Use YYYY-MM-DD")
+    
+    # Update habit log
+    habit_log_data = habit_log.dict(exclude_unset=True)
+    db_habit_log = update_habit_log(db, user_id, log_date_obj, habit_type, habit_log_data)
+    
+    if not db_habit_log:
+        raise HTTPException(status_code=404, detail=f"Habit log not found for {habit_type} on {log_date}")
+    
+    return db_habit_log
+
+@app.delete("/users/{user_id}/habit-logs/{log_date}/{habit_type}")
+async def delete_habit_log_endpoint(user_id: int, log_date: str, habit_type: str, db: Session = Depends(get_db)):
+    """Delete a habit log for a user."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Parse date
+    from datetime import date
+    try:
+        log_date_obj = date.fromisoformat(log_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid log_date format. Use YYYY-MM-DD")
+    
+    success = delete_habit_log(db, user_id, log_date_obj, habit_type)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Habit log not found for {habit_type} on {log_date}")
+    
+    return {"message": f"Habit log for {habit_type} on {log_date} deleted successfully"}
+
+# Progress endpoints
+@app.get("/users/{user_id}/progress/daily/{target_date}/{habit_type}", response_model=DailyProgressResponse)
+async def get_daily_progress(user_id: int, target_date: str, habit_type: str, db: Session = Depends(get_db)):
+    """Get daily progress for a specific habit."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Parse date
+    from datetime import date
+    try:
+        target_date_obj = date.fromisoformat(target_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid target_date format. Use YYYY-MM-DD")
+    
+    progress = calculate_daily_progress(db, user_id, target_date_obj, habit_type)
+    
+    if "error" in progress:
+        raise HTTPException(status_code=404, detail=progress["error"])
+    
+    return DailyProgressResponse(**progress)
+
+@app.get("/users/{user_id}/progress/weekly/{week_start}/{habit_type}", response_model=WeeklyProgressResponse)
+async def get_weekly_progress(user_id: int, week_start: str, habit_type: str, db: Session = Depends(get_db)):
+    """Get weekly progress for a specific habit."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Parse date
+    from datetime import date
+    try:
+        week_start_obj = date.fromisoformat(week_start)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid week_start format. Use YYYY-MM-DD")
+    
+    progress = calculate_weekly_progress(db, user_id, week_start_obj, habit_type)
+    
+    if "error" in progress:
+        raise HTTPException(status_code=404, detail=progress["error"])
+    
+    return WeeklyProgressResponse(**progress)
+
+@app.get("/users/{user_id}/progress/monthly/{year}/{month}/{habit_type}", response_model=MonthlyProgressResponse)
+async def get_monthly_progress(user_id: int, year: int, month: int, habit_type: str, db: Session = Depends(get_db)):
+    """Get monthly progress for a specific habit."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Validate month
+    if month < 1 or month > 12:
+        raise HTTPException(status_code=400, detail="Month must be between 1 and 12")
+    
+    progress = calculate_monthly_progress(db, user_id, year, month, habit_type)
+    
+    if "error" in progress:
+        raise HTTPException(status_code=404, detail=progress["error"])
+    
+    return MonthlyProgressResponse(**progress)
+
+# Feedback endpoint
+@app.get("/users/{user_id}/feedback/{habit_type}", response_model=FeedbackResponse)
+async def get_feedback(user_id: int, habit_type: str, days: int = 7, db: Session = Depends(get_db)):
+    """Get feedback for a specific habit based on recent performance."""
+    # Check if user exists
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Validate days parameter
+    if days < 1 or days > 30:
+        raise HTTPException(status_code=400, detail="Days must be between 1 and 30")
+    
+    feedback = generate_feedback(db, user_id, habit_type, days)
+    
+    if "error" in feedback:
+        raise HTTPException(status_code=404, detail=feedback["error"])
+    
+    return FeedbackResponse(**feedback)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

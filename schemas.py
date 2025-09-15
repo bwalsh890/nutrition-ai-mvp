@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 
 # Base schema
 class UserBase(BaseModel):
@@ -103,3 +103,147 @@ class HealthProfileResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Habit tracking schemas
+class QuestionnaireCreate(BaseModel):
+    sleep_hours: Optional[float] = None
+    water_goal_ml: Optional[int] = None
+    meal_frequency: Optional[int] = None
+    exercise_frequency: Optional[int] = None
+    exercise_duration: Optional[int] = None
+    stress_level: Optional[str] = None
+    energy_level: Optional[str] = None
+    mood_tracking: Optional[bool] = False
+    weight_goal: Optional[str] = None
+    target_weight_kg: Optional[float] = None
+
+class QuestionnaireUpdate(BaseModel):
+    sleep_hours: Optional[float] = None
+    water_goal_ml: Optional[int] = None
+    meal_frequency: Optional[int] = None
+    exercise_frequency: Optional[int] = None
+    exercise_duration: Optional[int] = None
+    stress_level: Optional[str] = None
+    energy_level: Optional[str] = None
+    mood_tracking: Optional[bool] = None
+    weight_goal: Optional[str] = None
+    target_weight_kg: Optional[float] = None
+
+class QuestionnaireResponse(BaseModel):
+    id: int
+    user_id: int
+    sleep_hours: Optional[float] = None
+    water_goal_ml: Optional[int] = None
+    meal_frequency: Optional[int] = None
+    exercise_frequency: Optional[int] = None
+    exercise_duration: Optional[int] = None
+    stress_level: Optional[str] = None
+    energy_level: Optional[str] = None
+    mood_tracking: bool = False
+    weight_goal: Optional[str] = None
+    target_weight_kg: Optional[float] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+class HabitTargetCreate(BaseModel):
+    habit_type: str  # "water", "meals", "exercise", "sleep"
+    target_value: float
+    target_unit: str  # "ml", "count", "minutes", "hours"
+
+class HabitTargetUpdate(BaseModel):
+    target_value: Optional[float] = None
+    target_unit: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class HabitTargetResponse(BaseModel):
+    id: int
+    user_id: int
+    habit_type: str
+    target_value: float
+    target_unit: str
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+class HabitLogCreate(BaseModel):
+    log_date: date
+    habit_type: str  # "water", "meals", "exercise", "sleep", "mood"
+    logged_value: float
+    unit: str  # "ml", "count", "minutes", "hours", "rating"
+    notes: Optional[str] = None
+
+class HabitLogUpdate(BaseModel):
+    logged_value: Optional[float] = None
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+
+class HabitLogResponse(BaseModel):
+    id: int
+    user_id: int
+    log_date: date
+    habit_type: str
+    logged_value: float
+    unit: str
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+class ProgressStatsResponse(BaseModel):
+    id: int
+    user_id: int
+    stat_date: date
+    period_type: str  # "daily", "weekly", "monthly"
+    habit_type: str
+    total_value: float
+    target_value: float
+    completion_percentage: float
+    streak_days: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class DailyProgressResponse(BaseModel):
+    date: date
+    habit_type: str
+    logged_value: float
+    target_value: float
+    completion_percentage: float
+    streak_days: int
+    is_goal_met: bool
+
+class WeeklyProgressResponse(BaseModel):
+    week_start: date
+    week_end: date
+    habit_type: str
+    total_value: float
+    target_value: float
+    completion_percentage: float
+    days_met: int
+    total_days: int
+
+class MonthlyProgressResponse(BaseModel):
+    month: str  # "2024-01"
+    habit_type: str
+    total_value: float
+    target_value: float
+    completion_percentage: float
+    days_met: int
+    total_days: int
+
+class FeedbackResponse(BaseModel):
+    habit_type: str
+    feedback_message: str
+    suggestions: List[str]
+    encouragement: str
+    completion_percentage: float
+    streak_days: int

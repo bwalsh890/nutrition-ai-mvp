@@ -1,0 +1,48 @@
+/* Additional custom styles if needed */
+.mobile-container {
+  padding-bottom: 80px; /* Space for bottom navigation */
+}
+
+/* Custom scrollbar for mobile */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Smooth transitions */
+* {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Focus states for accessibility */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 480px) {
+  .mobile-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .card {
+    margin-bottom: 1rem;
+  }
+}
