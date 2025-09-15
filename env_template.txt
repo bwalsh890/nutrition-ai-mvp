@@ -16,4 +16,4 @@ PROJECT_NAME=Nutrition AI MVP
 BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:8080
 
 # OpenAI Configuration
-OPENAI_API_KEY=sk-your-openai-api-key-here
+OPENAI_API_KEY=REPLACE_WITH_YOUR_ACTUAL_OPENAI_API_KEY
