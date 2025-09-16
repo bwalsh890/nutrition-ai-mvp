@@ -12,7 +12,6 @@ class User(Base):
     full_name = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
-    is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -22,7 +21,6 @@ class User(Base):
     questionnaire = relationship("UserQuestionnaire", back_populates="user", uselist=False)
     habit_logs = relationship("DailyHabitLog", back_populates="user")
     habit_targets = relationship("HabitTarget", back_populates="user")
-    progress_stats = relationship("ProgressStats", back_populates="user")
     
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
@@ -128,22 +126,3 @@ class DailyHabitLog(Base):
     def __repr__(self):
         return f"<DailyHabitLog(user_id={self.user_id}, date={self.log_date}, habit='{self.habit_type}', value={self.logged_value})>"
 
-class ProgressStats(Base):
-    __tablename__ = "progress_stats"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    stat_date = Column(Date, nullable=False)
-    period_type = Column(String, nullable=False)  # "daily", "weekly", "monthly"
-    habit_type = Column(String, nullable=False)  # "water", "meals", "exercise", "sleep"
-    total_value = Column(Float, nullable=False)  # Total value for the period
-    target_value = Column(Float, nullable=False)  # Target value for the period
-    completion_percentage = Column(Float, nullable=False)  # Percentage of target achieved
-    streak_days = Column(Integer, default=0)  # Current streak
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationship to user
-    user = relationship("User", back_populates="progress_stats")
-    
-    def __repr__(self):
-        return f"<ProgressStats(user_id={self.user_id}, date={self.stat_date}, habit='{self.habit_type}', completion={self.completion_percentage}%)>"

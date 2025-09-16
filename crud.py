@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from passlib.context import CryptContext
 from datetime import datetime, date
-from models import User, MessageTracking, UserHealthProfile, UserQuestionnaire, DailyHabitLog, HabitTarget, ProgressStats
+from models import User, MessageTracking, UserHealthProfile, UserQuestionnaire, DailyHabitLog, HabitTarget
 from schemas import UserCreate, UserUpdate
 
 # Password hashing
@@ -374,32 +374,6 @@ def delete_habit_log(db: Session, user_id: int, log_date: date, habit_type: str)
     db.commit()
     return True
 
-# Progress Stats CRUD operations
-def get_progress_stats(db: Session, user_id: int, habit_type: str = None, period_type: str = None, start_date: date = None, end_date: date = None) -> List[ProgressStats]:
-    """Get user's progress stats with optional filters."""
-    query = db.query(ProgressStats).filter(ProgressStats.user_id == user_id)
-    
-    if habit_type:
-        query = query.filter(ProgressStats.habit_type == habit_type)
-    if period_type:
-        query = query.filter(ProgressStats.period_type == period_type)
-    if start_date:
-        query = query.filter(ProgressStats.stat_date >= start_date)
-    if end_date:
-        query = query.filter(ProgressStats.stat_date <= end_date)
-    
-    return query.order_by(ProgressStats.stat_date.desc()).all()
-
-def create_progress_stat(db: Session, user_id: int, progress_data: dict) -> ProgressStats:
-    """Create a new progress stat for a user."""
-    db_progress_stat = ProgressStats(
-        user_id=user_id,
-        **progress_data
-    )
-    db.add(db_progress_stat)
-    db.commit()
-    db.refresh(db_progress_stat)
-    return db_progress_stat
 
 # Helper functions for progress calculations
 def calculate_daily_progress(db: Session, user_id: int, target_date: date, habit_type: str) -> dict:

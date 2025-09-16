@@ -110,6 +110,16 @@ ENV/
 env.bak/
 venv.bak/
 
+# API Keys and Secrets
+*.key
+**/*key*
+.openai_api_key
+config/secrets.json
+secrets/
+*.pem
+*.p12
+*.pfx
+
 # Spyder project settings
 .spyderproject
 .spyproject

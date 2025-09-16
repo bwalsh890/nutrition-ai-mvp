@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Test</title>
+</head>
+<body>
+    <h1>Basic Test Page</h1>
+    <p>If you can see this, the page is loading.</p>
+    
+    <div id="test"></div>
+    
+    <script>
+        console.log("Script running...");
+        
+        // Test localStorage
+        try {
+            const user = {
+                id: 6,
+                username: 'Brendon2',
+                email: 'brendon2@example.com'
+            };
+            localStorage.setItem('currentUser', JSON.stringify(user));
+            console.log("User set in localStorage:", user);
+            
+            const retrieved = JSON.parse(localStorage.getItem('currentUser'));
+            console.log("Retrieved from localStorage:", retrieved);
+            
+            document.getElementById('test').innerHTML = `
+                <h2>localStorage Test</h2>
+                <p>User: ${retrieved.username} (ID: ${retrieved.id})</p>
+                <p>Email: ${retrieved.email}</p>
+            `;
+        } catch (error) {
+            console.error("Error:", error);
+            document.getElementById('test').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        }
+    </script>
+</body>
+</html>

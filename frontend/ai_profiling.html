@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Health Profiling - Nutrition AI</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .typing-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #6b7280;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        .typing-indicator:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator:nth-child(2) { animation-delay: -0.16s; }
+        .typing-indicator:nth-child(3) { animation-delay: 0s; }
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const AIProfiling = () => {
+            const [messages, setMessages] = useState([]);
+            const [currentMessage, setCurrentMessage] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [sessionData, setSessionData] = useState(null);
+            const [isComplete, setIsComplete] = useState(false);
+            const [userId] = useState(6); // Using Brendon2's ID
+
+            useEffect(() => {
+                startProfiling();
+            }, []);
+
+            const startProfiling = async () => {
+                try {
+                    setIsLoading(true);
+                    console.log('Starting AI profiling...');
+                    
+                    const response = await fetch(`http://localhost:8000/start-ai-profiling/${userId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('AI Profiling started:', data);
+                    
+                    setMessages([{
+                        id: '1',
+                        type: 'ai',
+                        content: data.message,
+                        timestamp: new Date()
+                    }]);
+                    
+                    setSessionData(data.session_data);
+                } catch (error) {
+                    console.error('Error starting AI profiling:', error);
+                    setMessages([{
+                        id: 'error',
+                        type: 'ai',
+                        content: `Error: ${error.message}. Please check the console and try again.`,
+                        timestamp: new Date()
+                    }]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const sendMessage = async () => {
+                if (!currentMessage.trim() || isLoading) return;
+
+                const userMessage = {
+                    id: Date.now().toString(),
+                    type: 'user',
+                    content: currentMessage,
+                    timestamp: new Date()
+                };
+
+                setMessages(prev => [...prev, userMessage]);
+                setCurrentMessage('');
+                setIsLoading(true);
+
+                try {
+                    const response = await fetch('http://localhost:8000/ai-profiling-chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            user_id: userId,
+                            message: currentMessage,
+                            session_data: sessionData
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    console.log('AI response:', data);
+
+                    // Add AI response with typing effect
+                    setTimeout(() => {
+                        setMessages(prev => [...prev, {
+                            id: (Date.now() + 1).toString(),
+                            type: 'ai',
+                            content: data.response,
+                            timestamp: new Date()
+                        }]);
+                    }, 1000);
+
+                    setSessionData(data.session_data);
+                    setIsComplete(data.is_complete);
+
+                    if (data.is_complete) {
+                        // Redirect to dashboard after completion
+                        setTimeout(() => {
+                            // Set user in localStorage for dashboard
+                            const user = { id: userId, username: 'Brendon2', email: 'brendon2@example.com' };
+                            localStorage.setItem('currentUser', JSON.stringify(user));
+                            window.location.href = 'fixed_dashboard.html';
+                        }, 3000);
+                    }
+
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    setMessages(prev => [...prev, {
+                        id: (Date.now() + 1).toString(),
+                        type: 'ai',
+                        content: `Sorry, I encountered an error: ${error.message}`,
+                        timestamp: new Date()
+                    }]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+                    <div className="container mx-auto px-4 py-8">
+                        <div className="max-w-4xl mx-auto">
+                            {/* Header */}
+                            <div className="text-center mb-8">
+                                <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                                    AI Health Profiling
+                                </h1>
+                                <p className="text-lg text-gray-600">
+                                    Let's have a conversation to build your personalized nutrition plan
+                                </p>
+                                {isComplete && (
+                                    <div className="mt-4 p-4 bg-green-100 border border-green-400 rounded-lg">
+                                        <p className="text-green-800 font-semibold">
+                                            ✅ Profile Complete! Redirecting to your dashboard...
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Chat Container */}
+                            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                                {/* Messages */}
+                                <div className="h-96 overflow-y-auto p-6 space-y-4">
+                                    {messages.map((message) => (
+                                        <div
+                                            key={message.id}
+                                            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                                        >
+                                            <div
+                                                className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                                                    message.type === 'user'
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'bg-gray-100 text-gray-900'
+                                                }`}
+                                            >
+                                                <div className="text-sm whitespace-pre-wrap">
+                                                    {message.content}
+                                                </div>
+                                                <div className={`text-xs mt-1 ${
+                                                    message.type === 'user' ? 'text-blue-100' : 'text-gray-500'
+                                                }`}>
+                                                    {message.timestamp.toLocaleTimeString()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    
+                                    {/* Loading indicator */}
+                                    {isLoading && (
+                                        <div className="flex justify-start">
+                                            <div className="bg-gray-100 text-gray-900 px-4 py-3 rounded-2xl">
+                                                <div className="flex items-center space-x-1">
+                                                    <div className="typing-indicator"></div>
+                                                    <div className="typing-indicator"></div>
+                                                    <div className="typing-indicator"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Input Area */}
+                                <div className="border-t bg-gray-50 p-4">
+                                    <div className="flex space-x-3">
+                                        <textarea
+                                            value={currentMessage}
+                                            onChange={(e) => setCurrentMessage(e.target.value)}
+                                            onKeyPress={handleKeyPress}
+                                            placeholder="Type your response here..."
+                                            className="flex-1 p-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            rows="2"
+                                            disabled={isLoading || isComplete}
+                                        />
+                                        <button
+                                            onClick={sendMessage}
+                                            disabled={isLoading || !currentMessage.trim() || isComplete}
+                                            className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
+                                        >
+                                            {isLoading ? 'Sending...' : 'Send'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Progress Indicator */}
+                            <div className="mt-6 text-center">
+                                <div className="text-sm text-gray-600">
+                                    {isComplete ? (
+                                        <span className="text-green-600 font-semibold">
+                                            🎉 Profile Complete! Building your personalized plan...
+                                        </span>
+                                    ) : (
+                                        <span>
+                                            💬 Having a natural conversation to understand your needs...
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<AIProfiling />, document.getElementById('root'));
+    </script>
+</body>
+</html>

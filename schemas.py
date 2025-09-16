@@ -24,7 +24,6 @@ class UserUpdate(BaseModel):
 # Schema for user response
 class UserResponse(UserBase):
     id: int
-    is_superuser: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
     
@@ -197,20 +196,6 @@ class HabitLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class ProgressStatsResponse(BaseModel):
-    id: int
-    user_id: int
-    stat_date: date
-    period_type: str  # "daily", "weekly", "monthly"
-    habit_type: str
-    total_value: float
-    target_value: float
-    completion_percentage: float
-    streak_days: int
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 class DailyProgressResponse(BaseModel):
     date: date

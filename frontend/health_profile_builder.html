@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nutrition AI - Health Profile Builder</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        .header p {
+            color: #6b7280;
+            font-size: 1.1rem;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 10px;
+            font-weight: bold;
+            color: white;
+        }
+        .step.active {
+            background: #3b82f6;
+        }
+        .step.completed {
+            background: #10b981;
+        }
+        .step.pending {
+            background: #d1d5db;
+        }
+        .form-section {
+            display: none;
+            margin: 20px 0;
+        }
+        .form-section.active {
+            display: block;
+        }
+        .form-section h3 {
+            color: #374151;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .checkbox-item:hover {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+        }
+        .checkbox-item.selected {
+            border-color: #3b82f6;
+            background: #dbeafe;
+        }
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 10px;
+            width: auto;
+        }
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background: #6b7280;
+        }
+        button.secondary:hover {
+            background: #4b5563;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 2px solid #a7f3d0;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 2px solid #fca5a5;
+        }
+        .status.loading {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 2px solid #93c5fd;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #10b981);
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍎 Nutrition AI</h1>
+            <p>Let's build your personalized health profile for better nutrition advice</p>
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+
+        <div class="step-indicator">
+            <div class="step active" id="step-1">1</div>
+            <div class="step pending" id="step-2">2</div>
+            <div class="step pending" id="step-3">3</div>
+            <div class="step pending" id="step-4">4</div>
+            <div class="step pending" id="step-5">5</div>
+        </div>
+
+        <!-- Step 1: Basic Info -->
+        <div class="form-section active" id="section-1">
+            <h3>👤 Basic Information</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="username">Username *</label>
+                    <input type="text" id="username" placeholder="Choose a username" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email *</label>
+                    <input type="email" id="email" placeholder="your@email.com" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="full_name">Full Name *</label>
+                    <input type="text" id="full_name" placeholder="Your full name" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password *</label>
+                    <input type="password" id="password" placeholder="Create a password" required>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Physical Stats -->
+        <div class="form-section" id="section-2">
+            <h3>📏 Physical Statistics</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="age">Age *</label>
+                    <input type="number" id="age" placeholder="25" min="13" max="120" required>
+                </div>
+                <div class="form-group">
+                    <label for="gender">Gender *</label>
+                    <select id="gender" required>
+                        <option value="">Select gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                        <option value="prefer_not_to_say">Prefer not to say</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="height_cm">Height (cm) *</label>
+                    <input type="number" id="height_cm" placeholder="170" min="100" max="250" required>
+                </div>
+                <div class="form-group">
+                    <label for="weight_kg">Weight (kg) *</label>
+                    <input type="number" id="weight_kg" placeholder="70" min="30" max="300" step="0.1" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="activity_level">Activity Level *</label>
+                <select id="activity_level" required>
+                    <option value="">Select your activity level</option>
+                    <option value="sedentary">Sedentary (little to no exercise)</option>
+                    <option value="light">Lightly active (light exercise 1-3 days/week)</option>
+                    <option value="moderate">Moderately active (moderate exercise 3-5 days/week)</option>
+                    <option value="very_active">Very active (hard exercise 6-7 days/week)</option>
+                    <option value="extremely_active">Extremely active (very hard exercise, physical job)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Step 3: Health Conditions -->
+        <div class="form-section" id="section-3">
+            <h3>🏥 Health Conditions & Goals</h3>
+            <div class="form-group">
+                <label>Health Conditions (select all that apply)</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="diabetes" value="diabetes">
+                        <label for="diabetes">Diabetes</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="hypertension" value="hypertension">
+                        <label for="hypertension">High Blood Pressure</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="heart_disease" value="heart_disease">
+                        <label for="heart_disease">Heart Disease</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="high_cholesterol" value="high_cholesterol">
+                        <label for="high_cholesterol">High Cholesterol</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="thyroid" value="thyroid">
+                        <label for="thyroid">Thyroid Issues</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="digestive" value="digestive">
+                        <label for="digestive">Digestive Issues</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="arthritis" value="arthritis">
+                        <label for="arthritis">Arthritis</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="none" value="none">
+                        <label for="none">None</label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Fitness Goals (select all that apply)</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="weight_loss" value="weight_loss">
+                        <label for="weight_loss">Weight Loss</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="muscle_gain" value="muscle_gain">
+                        <label for="muscle_gain">Muscle Gain</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="maintenance" value="maintenance">
+                        <label for="maintenance">Weight Maintenance</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="endurance" value="endurance">
+                        <label for="endurance">Improve Endurance</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="strength" value="strength">
+                        <label for="strength">Build Strength</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="energy" value="energy">
+                        <label for="energy">Increase Energy</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Dietary Preferences -->
+        <div class="form-section" id="section-4">
+            <h3>🥗 Dietary Preferences & Restrictions</h3>
+            <div class="form-group">
+                <label>Dietary Restrictions (select all that apply)</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="vegetarian" value="vegetarian">
+                        <label for="vegetarian">Vegetarian</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="vegan" value="vegan">
+                        <label for="vegan">Vegan</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="gluten_free" value="gluten_free">
+                        <label for="gluten_free">Gluten-Free</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="dairy_free" value="dairy_free">
+                        <label for="dairy_free">Dairy-Free</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="keto" value="keto">
+                        <label for="keto">Keto</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="paleo" value="paleo">
+                        <label for="paleo">Paleo</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="low_carb" value="low_carb">
+                        <label for="low_carb">Low Carb</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="mediterranean" value="mediterranean">
+                        <label for="mediterranean">Mediterranean</label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="allergies">Food Allergies (comma-separated)</label>
+                <input type="text" id="allergies" placeholder="nuts, shellfish, eggs">
+            </div>
+            <div class="form-group">
+                <label for="medications">Current Medications (comma-separated)</label>
+                <input type="text" id="medications" placeholder="metformin, lisinopril">
+            </div>
+        </div>
+
+        <!-- Step 5: Lifestyle & Preferences -->
+        <div class="form-section" id="section-5">
+            <h3>🌱 Lifestyle & Preferences</h3>
+            <div class="form-group">
+                <label for="cooking_skill">Cooking Skill Level</label>
+                <select id="cooking_skill">
+                    <option value="">Select your cooking skill</option>
+                    <option value="beginner">Beginner (basic recipes)</option>
+                    <option value="intermediate">Intermediate (comfortable cooking)</option>
+                    <option value="advanced">Advanced (complex recipes)</option>
+                    <option value="expert">Expert (professional level)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="time_available">Time Available for Meal Prep (per day)</label>
+                <select id="time_available">
+                    <option value="">Select time available</option>
+                    <option value="15_minutes">15 minutes</option>
+                    <option value="30_minutes">30 minutes</option>
+                    <option value="45_minutes">45 minutes</option>
+                    <option value="1_hour">1 hour</option>
+                    <option value="more_than_1_hour">More than 1 hour</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="budget">Monthly Food Budget</label>
+                <select id="budget">
+                    <option value="">Select budget range</option>
+                    <option value="under_200">Under $200</option>
+                    <option value="200_400">$200 - $400</option>
+                    <option value="400_600">$400 - $600</option>
+                    <option value="600_800">$600 - $800</option>
+                    <option value="over_800">Over $800</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="additional_notes">Additional Notes or Preferences</label>
+                <textarea id="additional_notes" rows="4" placeholder="Any other information that might help with your nutrition advice..."></textarea>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button type="button" id="prev-btn" class="secondary" onclick="previousStep()" style="display: none;">Previous</button>
+            <button type="button" id="next-btn" onclick="nextStep()">Next</button>
+            <button type="button" id="submit-btn" onclick="submitProfile()" style="display: none;">Complete Profile</button>
+        </div>
+
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentStep = 1;
+        const totalSteps = 5;
+        let userId = null;
+
+        function updateProgress() {
+            const progress = (currentStep / totalSteps) * 100;
+            document.getElementById('progress-fill').style.width = progress + '%';
+        }
+
+        function updateStepIndicator() {
+            for (let i = 1; i <= totalSteps; i++) {
+                const step = document.getElementById(`step-${i}`);
+                if (i < currentStep) {
+                    step.className = 'step completed';
+                } else if (i === currentStep) {
+                    step.className = 'step active';
+                } else {
+                    step.className = 'step pending';
+                }
+            }
+        }
+
+        function showStep(step) {
+            // Hide all sections
+            document.querySelectorAll('.form-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Show current section
+            document.getElementById(`section-${step}`).classList.add('active');
+            
+            // Update buttons
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            prevBtn.style.display = step > 1 ? 'block' : 'none';
+            nextBtn.style.display = step < totalSteps ? 'block' : 'none';
+            submitBtn.style.display = step === totalSteps ? 'block' : 'none';
+        }
+
+        function nextStep() {
+            if (validateCurrentStep()) {
+                if (currentStep < totalSteps) {
+                    currentStep++;
+                    updateProgress();
+                    updateStepIndicator();
+                    showStep(currentStep);
+                }
+            }
+        }
+
+        function previousStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateProgress();
+                updateStepIndicator();
+                showStep(currentStep);
+            }
+        }
+
+        function validateCurrentStep() {
+            const currentSection = document.getElementById(`section-${currentStep}`);
+            const requiredFields = currentSection.querySelectorAll('[required]');
+            
+            for (let field of requiredFields) {
+                if (!field.value.trim()) {
+                    showStatus(`Please fill in ${field.placeholder || field.name || 'this field'}`, 'error');
+                    field.focus();
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+            setTimeout(() => {
+                statusDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        function getSelectedCheckboxes(groupName) {
+            const checkboxes = document.querySelectorAll(`input[type="checkbox"]:checked`);
+            return Array.from(checkboxes).map(cb => cb.value).filter(value => value !== 'none');
+        }
+
+        async function submitProfile() {
+            if (!validateCurrentStep()) {
+                return;
+            }
+
+            showStatus('Creating your profile...', 'loading');
+
+            try {
+                // Create user first
+                const userData = {
+                    username: document.getElementById('username').value,
+                    email: document.getElementById('email').value,
+                    full_name: document.getElementById('full_name').value,
+                    password: document.getElementById('password').value
+                };
+
+                const userResponse = await fetch(`${API_BASE}/users/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userData)
+                });
+
+                if (!userResponse.ok) {
+                    const errorData = await userResponse.json();
+                    throw new Error(`User creation failed: ${errorData.detail || 'Unknown error'}`);
+                }
+
+                const user = await userResponse.json();
+                userId = user.id;
+
+                // Create health profile
+                const healthProfile = {
+                    age: parseInt(document.getElementById('age').value),
+                    gender: document.getElementById('gender').value,
+                    height_cm: parseInt(document.getElementById('height_cm').value),
+                    weight_kg: parseFloat(document.getElementById('weight_kg').value),
+                    activity_level: document.getElementById('activity_level').value,
+                    health_conditions: getSelectedCheckboxes('health_conditions'),
+                    fitness_goals: getSelectedCheckboxes('fitness_goals'),
+                    dietary_restrictions: getSelectedCheckboxes('dietary_restrictions'),
+                    allergies: document.getElementById('allergies').value.split(',').map(a => a.trim()).filter(a => a),
+                    medications: document.getElementById('medications').value.split(',').map(m => m.trim()).filter(m => m),
+                    cooking_skill: document.getElementById('cooking_skill').value,
+                    time_available: document.getElementById('time_available').value,
+                    budget: document.getElementById('budget').value,
+                    additional_notes: document.getElementById('additional_notes').value
+                };
+
+                const healthResponse = await fetch(`${API_BASE}/users/${userId}/health-profile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(healthProfile)
+                });
+
+                if (!healthResponse.ok) {
+                    const errorData = await healthResponse.json();
+                    throw new Error(`Health profile creation failed: ${errorData.detail || 'Unknown error'}`);
+                }
+
+                showStatus('🎉 Profile created successfully! You can now chat with the AI for personalized nutrition advice.', 'success');
+                
+                // Redirect to chat after 3 seconds
+                setTimeout(() => {
+                    window.location.href = 'improved_test.html';
+                }, 3000);
+
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize
+        updateProgress();
+        updateStepIndicator();
+        showStep(1);
+
+        // Add checkbox selection styling
+        document.querySelectorAll('.checkbox-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const checkbox = this.querySelector('input[type="checkbox"]');
+                checkbox.checked = !checkbox.checked;
+                
+                if (checkbox.checked) {
+                    this.classList.add('selected');
+                } else {
+                    this.classList.remove('selected');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

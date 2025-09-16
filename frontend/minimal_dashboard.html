@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal Dashboard - Nutrition AI</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const MinimalDashboard = () => {
+            const [user, setUser] = useState(null);
+            const [healthProfile, setHealthProfile] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+
+            useEffect(() => {
+                console.log("Starting dashboard load...");
+                loadUserData();
+            }, []);
+
+            const loadUserData = async () => {
+                try {
+                    console.log("Loading user from localStorage...");
+                    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                    console.log("User data:", currentUser);
+                    
+                    if (!currentUser.id) {
+                        console.log("No user found, redirecting to auth...");
+                        window.location.href = 'auth.html';
+                        return;
+                    }
+
+                    setUser(currentUser);
+                    console.log("User set:", currentUser);
+
+                    // Load health profile
+                    console.log("Loading health profile...");
+                    const response = await fetch(`http://localhost:8000/users/${currentUser.id}/health-profile`);
+                    console.log("Health profile response status:", response.status);
+                    
+                    if (response.ok) {
+                        const profile = await response.json();
+                        console.log("Health profile loaded:", profile);
+                        setHealthProfile(profile);
+                    } else {
+                        console.log("Health profile error:", response.status);
+                    }
+                } catch (error) {
+                    console.error('Error loading user data:', error);
+                } finally {
+                    setIsLoading(false);
+                    console.log("Loading complete");
+                }
+            };
+
+            if (isLoading) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                            <p className="text-gray-600">Loading dashboard...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-100">
+                    <div className="bg-white shadow-sm border-b p-4">
+                        <h1 className="text-2xl font-bold text-gray-900">Nutrition AI Dashboard</h1>
+                        <p className="text-gray-600">Welcome, {user ? user.username : 'User'}!</p>
+                    </div>
+                    
+                    <div className="p-6">
+                        <div className="bg-white rounded-lg shadow p-6 mb-6">
+                            <h2 className="text-xl font-semibold mb-4">User Info</h2>
+                            <p>ID: {user ? user.id : 'N/A'}</p>
+                            <p>Email: {user ? user.email : 'N/A'}</p>
+                        </div>
+                        
+                        <div className="bg-white rounded-lg shadow p-6 mb-6">
+                            <h2 className="text-xl font-semibold mb-4">Health Profile</h2>
+                            {healthProfile ? (
+                                <div>
+                                    <p>Age: {healthProfile.age || 'N/A'}</p>
+                                    <p>Gender: {healthProfile.gender || 'N/A'}</p>
+                                    <p>Height: {healthProfile.height_cm || 'N/A'} cm</p>
+                                    <p>Weight: {healthProfile.weight_kg || 'N/A'} kg</p>
+                                    <p>Activity Level: {healthProfile.activity_level || 'N/A'}</p>
+                                </div>
+                            ) : (
+                                <p className="text-gray-500">No health profile found</p>
+                            )}
+                        </div>
+
+                        <div className="bg-white rounded-lg shadow p-6">
+                            <h2 className="text-xl font-semibold mb-4">Weekly Meal Plan</h2>
+                            <div className="grid grid-cols-7 gap-4">
+                                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                                    <div key={day} className="text-center">
+                                        <h3 className="font-semibold mb-2">{day}</h3>
+                                        <div className="space-y-2">
+                                            <div className="p-2 bg-gray-100 rounded text-sm">Breakfast</div>
+                                            <div className="p-2 bg-gray-100 rounded text-sm">Lunch</div>
+                                            <div className="p-2 bg-gray-100 rounded text-sm">Dinner</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mt-6">
+                            <button 
+                                onClick={() => {
+                                    localStorage.removeItem('currentUser');
+                                    window.location.href = 'structured_onboarding.html';
+                                }}
+                                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                            >
+                                Reset All Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        console.log("Rendering MinimalDashboard...");
+        ReactDOM.render(<MinimalDashboard />, document.getElementById('root'));
+        console.log("MinimalDashboard rendered successfully");
+    </script>
+</body>
+</html>

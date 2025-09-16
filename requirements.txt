@@ -7,3 +7,6 @@ passlib[bcrypt]
 python-multipart
 email-validator
 openai
+gunicorn
+python-dotenv
+psycopg2-binary

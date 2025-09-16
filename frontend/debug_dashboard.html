@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Dashboard - Nutrition AI</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const DebugDashboard = () => {
+            const [user, setUser] = useState(null);
+            const [healthProfile, setHealthProfile] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+            const [debugInfo, setDebugInfo] = useState([]);
+
+            const addDebugInfo = (message) => {
+                console.log(message);
+                setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+            };
+
+            useEffect(() => {
+                addDebugInfo("Starting debug dashboard...");
+                loadUserData();
+            }, []);
+
+            const loadUserData = async () => {
+                try {
+                    addDebugInfo("Loading user from localStorage...");
+                    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                    addDebugInfo(`User from localStorage: ${JSON.stringify(currentUser)}`);
+                    
+                    if (!currentUser.id) {
+                        addDebugInfo("No user found in localStorage, redirecting to auth...");
+                        window.location.href = 'auth.html';
+                        return;
+                    }
+
+                    setUser(currentUser);
+                    addDebugInfo(`User set: ${currentUser.username} (ID: ${currentUser.id})`);
+
+                    // Load health profile
+                    addDebugInfo(`Loading health profile for user ${currentUser.id}...`);
+                    const response = await fetch(`http://localhost:8000/users/${currentUser.id}/health-profile`);
+                    addDebugInfo(`Health profile response status: ${response.status}`);
+                    
+                    if (response.ok) {
+                        const profile = await response.json();
+                        addDebugInfo(`Health profile loaded: ${JSON.stringify(profile).substring(0, 100)}...`);
+                        setHealthProfile(profile);
+                    } else {
+                        addDebugInfo(`Health profile error: ${response.status} - ${await response.text()}`);
+                    }
+                } catch (error) {
+                    addDebugInfo(`Error loading user data: ${error.message}`);
+                    console.error('Error loading user data:', error);
+                } finally {
+                    setIsLoading(false);
+                    addDebugInfo("Loading complete");
+                }
+            };
+
+            if (isLoading) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                            <p className="text-gray-600">Loading dashboard...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-100">
+                    <div className="bg-white shadow-sm border-b p-4">
+                        <h1 className="text-2xl font-bold text-gray-900">Debug Dashboard</h1>
+                        <p className="text-gray-600">User: {user ? `${user.username} (ID: ${user.id})` : 'None'}</p>
+                    </div>
+                    
+                    <div className="p-6">
+                        <div className="bg-white rounded-lg shadow p-6 mb-6">
+                            <h2 className="text-xl font-semibold mb-4">Debug Information</h2>
+                            <div className="bg-gray-100 p-4 rounded max-h-96 overflow-y-auto">
+                                {debugInfo.map((info, index) => (
+                                    <div key={index} className="text-sm font-mono text-gray-700 mb-1">
+                                        {info}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-lg shadow p-6">
+                            <h2 className="text-xl font-semibold mb-4">Health Profile</h2>
+                            {healthProfile ? (
+                                <pre className="bg-gray-100 p-4 rounded text-sm overflow-x-auto">
+                                    {JSON.stringify(healthProfile, null, 2)}
+                                </pre>
+                            ) : (
+                                <p className="text-gray-500">No health profile found</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<DebugDashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>

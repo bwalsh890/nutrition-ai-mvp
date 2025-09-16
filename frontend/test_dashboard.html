@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dashboard - Nutrition AI</title>
+</head>
+<body>
+    <h1>Setting up test user...</h1>
+    <p>This page will set up user Brendon2 and redirect to the dashboard.</p>
+    
+    <script>
+        // Set up test user data
+        const user = {
+            id: 6,
+            username: 'Brendon2',
+            email: 'brendon2@example.com'
+        };
+        
+        // Clear any existing user data first
+        localStorage.clear();
+        
+        // Store in localStorage
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        
+        console.log('User set in localStorage:', user);
+        
+        // Redirect to dashboard
+        setTimeout(() => {
+            window.location.href = 'dashboard.html';
+        }, 2000);
+    </script>
+</body>
+</html>

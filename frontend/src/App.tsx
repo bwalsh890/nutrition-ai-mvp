@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { userApi, questionnaireApi, habitTargetApi } from './services/api';
 import Questionnaire from './components/Questionnaire';
-import Dashboard from './components/Dashboard';
 import HabitTracker from './components/HabitTracker';
 import Progress from './components/Progress';
 import Navigation from './components/Navigation';

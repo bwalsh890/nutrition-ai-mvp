@@ -2,6 +2,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create database engine
 if settings.DATABASE_URL.startswith("sqlite"):
@@ -29,5 +32,9 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error: {e}")
+        raise
     finally:
         db.close()

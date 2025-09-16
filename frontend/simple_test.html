@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Test - Nutrition AI</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const SimpleTest = () => {
+            const [user, setUser] = useState(null);
+            const [error, setError] = useState(null);
+
+            useEffect(() => {
+                try {
+                    console.log("Loading user from localStorage...");
+                    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                    console.log("User data:", currentUser);
+                    
+                    if (currentUser.id) {
+                        setUser(currentUser);
+                    } else {
+                        setError("No user found in localStorage");
+                    }
+                } catch (err) {
+                    console.error("Error:", err);
+                    setError(err.message);
+                }
+            }, []);
+
+            if (error) {
+                return (
+                    <div style={{ padding: '20px', color: 'red' }}>
+                        <h1>Error</h1>
+                        <p>{error}</p>
+                    </div>
+                );
+            }
+
+            if (!user) {
+                return (
+                    <div style={{ padding: '20px' }}>
+                        <h1>Loading...</h1>
+                    </div>
+                );
+            }
+
+            return (
+                <div style={{ padding: '20px' }}>
+                    <h1>Simple Test Dashboard</h1>
+                    <p>User: {user.username} (ID: {user.id})</p>
+                    <p>Email: {user.email}</p>
+                    <button onClick={() => window.location.href = 'dashboard.html'}>
+                        Go to Full Dashboard
+                    </button>
+                </div>
+            );
+        };
+
+        console.log("Rendering SimpleTest component...");
+        ReactDOM.render(<SimpleTest />, document.getElementById('root'));
+        console.log("SimpleTest component rendered successfully");
+    </script>
+</body>
+</html>

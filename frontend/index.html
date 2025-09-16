@@ -282,6 +282,115 @@
                 return `I want ${mainMotivation} so I can ${sixMonthVision} because ${deepWhy}`;
             };
 
+            const [isSaving, setIsSaving] = useState(false);
+            const [saveError, setSaveError] = useState(null);
+            const [userId, setUserId] = useState(null);
+
+            const saveProfileToDatabase = async () => {
+                setIsSaving(true);
+                setSaveError(null);
+                
+                try {
+                    // Generate a username from the profile data
+                    const username = `user_${Date.now()}`;
+                    const email = `${username}@nutrition-ai.local`;
+                    
+                    // Create user account
+                    const userData = {
+                        username: username,
+                        email: email,
+                        full_name: userProfile.fullName || 'Nutrition AI User',
+                        password: 'temp_password_123' // In real app, collect this during onboarding
+                    };
+
+                    const userResponse = await fetch('http://localhost:8000/users/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userData)
+                    });
+
+                    if (!userResponse.ok) {
+                        throw new Error('Failed to create user account');
+                    }
+
+                    const user = await userResponse.json();
+                    setUserId(user.id);
+
+                    // Create health profile from questionnaire data
+                    const healthProfile = {
+                        age: userProfile.age || 30,
+                        gender: userProfile.gender || 'prefer_not_to_say',
+                        height_cm: userProfile.height || 170,
+                        weight_kg: userProfile.currentWeight || 70,
+                        activity_level: mapExerciseToActivityLevel(userProfile.exerciseFrequency, userProfile.exerciseIntensity),
+                        health_conditions: extractHealthConditions(userProfile),
+                        fitness_goals: extractFitnessGoals(userProfile),
+                        dietary_restrictions: extractDietaryRestrictions(userProfile),
+                        allergies: userProfile.noGoFoods ? [userProfile.noGoFoods] : [],
+                        medications: [],
+                        cooking_skill: 'intermediate',
+                        time_available: '30_minutes',
+                        budget: '400_600',
+                        additional_notes: generateMissionStatement()
+                    };
+
+                    const healthResponse = await fetch(`http://localhost:8000/users/${user.id}/health-profile`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(healthProfile)
+                    });
+
+                    if (!healthResponse.ok) {
+                        throw new Error('Failed to create health profile');
+                    }
+
+                    // Success! Redirect to chat interface
+                    window.location.href = 'improved_test.html';
+
+                } catch (error) {
+                    console.error('Error saving profile:', error);
+                    setSaveError(error.message);
+                } finally {
+                    setIsSaving(false);
+                }
+            };
+
+            const mapExerciseToActivityLevel = (frequency, intensity) => {
+                if (frequency >= 6) return 'very_active';
+                if (frequency >= 4) return 'moderately_active';
+                if (frequency >= 2) return 'lightly_active';
+                return 'sedentary';
+            };
+
+            const extractHealthConditions = (profile) => {
+                const conditions = [];
+                if (profile.foodRelationship && profile.foodRelationship.includes('battle')) {
+                    conditions.push('digestive_issues');
+                }
+                return conditions;
+            };
+
+            const extractFitnessGoals = (profile) => {
+                const goals = [];
+                if (profile.targetWeight && profile.currentWeight && profile.targetWeight < profile.currentWeight) {
+                    goals.push('weight_loss');
+                } else if (profile.targetWeight && profile.currentWeight && profile.targetWeight > profile.currentWeight) {
+                    goals.push('muscle_gain');
+                }
+                if (profile.desiredEnergyLevel > profile.currentEnergyLevel) {
+                    goals.push('increase_energy');
+                }
+                return goals;
+            };
+
+            const extractDietaryRestrictions = (profile) => {
+                const restrictions = [];
+                if (profile.dietaryStyle) {
+                    restrictions.push(profile.dietaryStyle.toLowerCase().replace(' ', '_'));
+                }
+                return restrictions;
+            };
+
             if (isComplete) {
                 return (
                     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -297,11 +406,19 @@
                                     <p className="text-lg text-gray-700 italic">"{generateMissionStatement()}"</p>
                                 </div>
                                 <p className="text-gray-600 mb-8">I've built your personalized nutrition plan based on everything you've shared. Ready to start your journey?</p>
+                                
+                                {saveError && (
+                                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                                        <p className="text-red-600">Error: {saveError}</p>
+                                    </div>
+                                )}
+                                
                                 <button 
-                                    onClick={() => window.location.href = '/nutrition.html'}
-                                    className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                                    onClick={saveProfileToDatabase}
+                                    disabled={isSaving}
+                                    className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Start Your Journey
+                                    {isSaving ? 'Creating Your Profile...' : 'Start Your Journey'}
                                 </button>
                             </div>
                         </div>

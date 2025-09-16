@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:8000');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -9,6 +10,21 @@ const api = axios.create({
   },
 });
 
+// Add error interceptor
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 429) {
+      // Handle rate limiting
+      throw new Error('Rate limit exceeded. Please try again later.');
+    }
+    if (error.response?.status === 500) {
+      throw new Error('Server error. Please try again.');
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Types
 export interface User {
   id: number;
@@ -16,7 +32,6 @@ export interface User {
   username: string;
   full_name?: string;
   is_active: boolean;
-  is_superuser: boolean;
   created_at: string;
   updated_at?: string;
 }

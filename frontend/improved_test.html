@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nutrition AI - Improved Test Interface</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f8fafc;
+            padding: 20px;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #6b7280;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        .test-section h3 {
+            color: #374151;
+            margin-top: 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        .status.loading {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .response {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            margin: 5px 0;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .form-row {
+            display: flex;
+            gap: 10px;
+        }
+        .form-row input {
+            flex: 1;
+        }
+        .user-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 10px;
+            background: #f9fafb;
+        }
+        .user-item {
+            padding: 8px;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+        }
+        .user-item:hover {
+            background: #e5e7eb;
+        }
+        .user-item:last-child {
+            border-bottom: none;
+        }
+        .selected-user {
+            background: #dbeafe;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍎 Nutrition AI MVP - Improved Test</h1>
+            <p>Enhanced interface with user selection and better forms</p>
+        </div>
+
+        <div class="test-section">
+            <h3>🔗 Backend Connection Test</h3>
+            <button onclick="testBackend()">Test Backend Connection</button>
+            <div id="backend-status" class="status loading">Click to test backend connection...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>👤 User Management</h3>
+            <div class="form-row">
+                <input type="text" id="username" placeholder="Username" value="testuser">
+                <input type="email" id="email" placeholder="Email" value="test@example.com">
+            </div>
+            <div class="form-row">
+                <input type="text" id="fullname" placeholder="Full Name" value="Test User">
+                <input type="password" id="password" placeholder="Password" value="testpass123">
+            </div>
+            <button onclick="createUser()">Create New User</button>
+            <button onclick="loadUsers()">Load All Users</button>
+            <div id="user-status" class="status loading">Ready to manage users...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>👥 Select Existing User</h3>
+            <button onclick="loadUsers()">Refresh User List</button>
+            <div id="user-list" class="user-list" style="display: none;">
+                <p>Loading users...</p>
+            </div>
+            <div id="selected-user-info" style="margin-top: 10px; padding: 10px; background: #f0f9ff; border-radius: 6px; display: none;">
+                <strong>Selected User:</strong> <span id="selected-user-name"></span> (ID: <span id="selected-user-id"></span>)
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🤖 AI Chat Test</h3>
+            <textarea id="chat-message" placeholder="Ask me about nutrition..." rows="3">What should I eat for breakfast?</textarea>
+            <button onclick="testChat()" id="chat-button" disabled>Send Message (Select a user first)</button>
+            <div id="chat-status" class="status loading">Select a user to enable chat...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Health Profile Test</h3>
+            <button onclick="testHealthProfile()" id="health-button" disabled>Test Health Profile (Select a user first)</button>
+            <div id="health-status" class="status loading">Select a user to enable health profile test...</div>
+        </div>
+
+        <div id="responses"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentUserId = null;
+        let users = [];
+
+        function showStatus(elementId, message, type = 'loading') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+
+        function addResponse(title, data) {
+            const responsesDiv = document.getElementById('responses');
+            const responseDiv = document.createElement('div');
+            responseDiv.className = 'test-section';
+            responseDiv.innerHTML = `
+                <h3>${title}</h3>
+                <div class="response">${JSON.stringify(data, null, 2)}</div>
+            `;
+            responsesDiv.appendChild(responseDiv);
+        }
+
+        function selectUser(user) {
+            currentUserId = user.id;
+            document.getElementById('selected-user-name').textContent = user.full_name;
+            document.getElementById('selected-user-id').textContent = user.id;
+            document.getElementById('selected-user-info').style.display = 'block';
+            
+            // Enable buttons
+            document.getElementById('chat-button').disabled = false;
+            document.getElementById('health-button').disabled = false;
+            
+            // Update button text
+            document.getElementById('chat-button').textContent = `Send Message (User: ${user.username})`;
+            document.getElementById('health-button').textContent = `Test Health Profile (User: ${user.username})`;
+            
+            showStatus('chat-status', 'Ready to chat!', 'success');
+            showStatus('health-status', 'Ready to test health profile!', 'success');
+        }
+
+        function renderUserList() {
+            const userListDiv = document.getElementById('user-list');
+            if (users.length === 0) {
+                userListDiv.innerHTML = '<p>No users found. Create a user first!</p>';
+            } else {
+                userListDiv.innerHTML = users.map(user => `
+                    <div class="user-item" onclick="selectUser(${JSON.stringify(user).replace(/"/g, '&quot;')})">
+                        <strong>${user.full_name}</strong> (${user.username})<br>
+                        <small>Email: ${user.email} | ID: ${user.id}</small>
+                    </div>
+                `).join('');
+            }
+            userListDiv.style.display = 'block';
+        }
+
+        async function testBackend() {
+            showStatus('backend-status', 'Testing backend connection...', 'loading');
+            
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('backend-status', '✅ Backend connected successfully!', 'success');
+                    addResponse('Backend Health Check', data);
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                showStatus('backend-status', `❌ Backend connection failed: ${error.message}`, 'error');
+                addResponse('Backend Error', { error: error.message });
+            }
+        }
+
+        async function createUser() {
+            showStatus('user-status', 'Creating user...', 'loading');
+            
+            const userData = {
+                username: document.getElementById('username').value,
+                email: document.getElementById('email').value,
+                full_name: document.getElementById('fullname').value,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/users/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('user-status', `✅ User created successfully! ID: ${data.id}`, 'success');
+                    addResponse('User Created', data);
+                    
+                    // Auto-select the new user
+                    selectUser(data);
+                    
+                    // Refresh user list
+                    loadUsers();
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                showStatus('user-status', `❌ User creation failed: ${error.message}`, 'error');
+                addResponse('User Creation Error', { error: error.message });
+            }
+        }
+
+        async function loadUsers() {
+            showStatus('user-status', 'Loading users...', 'loading');
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    users = data;
+                    showStatus('user-status', `✅ Found ${data.length} users`, 'success');
+                    addResponse('All Users', data);
+                    renderUserList();
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                showStatus('user-status', `❌ Failed to load users: ${error.message}`, 'error');
+                addResponse('Load Users Error', { error: error.message });
+            }
+        }
+
+        async function testChat() {
+            if (!currentUserId) {
+                showStatus('chat-status', '❌ Please select a user first', 'error');
+                return;
+            }
+
+            showStatus('chat-status', 'Sending message to AI...', 'loading');
+            
+            const message = document.getElementById('chat-message').value;
+            const chatData = {
+                message: message,
+                user_id: currentUserId,
+                conversation_history: []
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(chatData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('chat-status', '✅ AI response received!', 'success');
+                    addResponse('AI Chat Response', data);
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                showStatus('chat-status', `❌ Chat failed: ${error.message}`, 'error');
+                addResponse('Chat Error', { error: error.message });
+            }
+        }
+
+        async function testHealthProfile() {
+            if (!currentUserId) {
+                showStatus('health-status', '❌ Please select a user first', 'error');
+                return;
+            }
+
+            showStatus('health-status', 'Testing health profile...', 'loading');
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/${currentUserId}/health-profile`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('health-status', '✅ Health profile retrieved!', 'success');
+                    addResponse('Health Profile', data);
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                showStatus('health-status', `❌ Health profile test failed: ${error.message}`, 'error');
+                addResponse('Health Profile Error', { error: error.message });
+            }
+        }
+
+        // Auto-test backend and load users on page load
+        window.onload = function() {
+            testBackend();
+            loadUsers();
+        };
+    </script>
+</body>
+</html>

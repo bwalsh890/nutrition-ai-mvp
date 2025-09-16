@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed Dashboard - Nutrition AI</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const Dashboard = () => {
+            const [user, setUser] = useState(null);
+            const [healthProfile, setHealthProfile] = useState(null);
+            const [dietPlan, setDietPlan] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [chatMessage, setChatMessage] = useState('');
+            const [isChatLoading, setIsChatLoading] = useState(false);
+            const [chatHistory, setChatHistory] = useState([]);
+            const [selectedDay, setSelectedDay] = useState('Monday');
+            const [viewMode, setViewMode] = useState('daily'); // 'daily' or 'weekly'
+
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const meals = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+
+            useEffect(() => {
+                console.log("Dashboard useEffect triggered");
+                loadUserData();
+            }, []);
+
+            const calculateDailyCalories = (profile) => {
+                if (!profile || !profile.age || !profile.gender || !profile.height_cm || !profile.weight_kg) {
+                    return 2000; // Default fallback
+                }
+                
+                // Calculate BMR using Mifflin-St Jeor Equation
+                let bmr;
+                if (profile.gender === 'male') {
+                    bmr = 10 * profile.weight_kg + 6.25 * profile.height_cm - 5 * profile.age + 5;
+                } else {
+                    bmr = 10 * profile.weight_kg + 6.25 * profile.height_cm - 5 * profile.age - 161;
+                }
+                
+                // Activity level multipliers
+                const activityMultipliers = {
+                    'sedentary': 1.2,
+                    'light': 1.375,
+                    'moderate': 1.55,
+                    'active': 1.725,
+                    'very_active': 1.9
+                };
+                
+                const activityLevel = profile.activity_level || 'moderate';
+                const multiplier = activityMultipliers[activityLevel] || 1.55;
+                
+                let dailyCalories = bmr * multiplier;
+                
+                // Adjust for weight goals
+                if (profile.weight_goal === 'lose') {
+                    dailyCalories -= 500; // 1 lb per week deficit
+                } else if (profile.weight_goal === 'gain') {
+                    dailyCalories += 500; // 1 lb per week surplus
+                }
+                
+                return Math.round(dailyCalories);
+            };
+
+            const calculateDailyTargets = (profile) => {
+                const calories = calculateDailyCalories(profile);
+                const weight = profile?.weight_kg || 70;
+                
+                return {
+                    calories: calories,
+                    protein: Math.round(weight * 1.6), // 1.6g per kg body weight
+                    carbs: Math.round(calories * 0.45 / 4), // 45% of calories from carbs
+                    fat: Math.round(calories * 0.25 / 9), // 25% of calories from fat
+                    fiber: Math.round(calories / 1000 * 14), // 14g per 1000 calories
+                    sugar: Math.round(calories * 0.10 / 4), // Max 10% from added sugars
+                    sodium: 2300, // mg
+                    potassium: 3500, // mg
+                    calcium: 1000, // mg
+                    iron: profile?.gender === 'female' ? 18 : 8, // mg
+                    vitaminC: 90, // mg
+                    vitaminD: 20, // mcg
+                    vitaminB12: 2.4, // mcg
+                    folate: 400, // mcg
+                    magnesium: 400, // mg
+                    zinc: 11, // mg
+                    water: 2500 // ml
+                };
+            };
+
+            const calculateDayNutrition = (dietPlan, day) => {
+                if (!dietPlan || !dietPlan[day]) return null;
+                
+                const dayMeals = dietPlan[day];
+                let total = {
+                    calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fat: 0,
+                    fiber: 0,
+                    sugar: 0,
+                    sodium: 0,
+                    potassium: 0,
+                    calcium: 0,
+                    iron: 0,
+                    vitaminC: 0,
+                    vitaminD: 0,
+                    vitaminB12: 0,
+                    folate: 0,
+                    magnesium: 0,
+                    zinc: 0
+                };
+                
+                Object.values(dayMeals).forEach(meal => {
+                    if (meal && typeof meal === 'object') {
+                        total.calories += meal.calories || 0;
+                        total.protein += parseFloat(meal.protein) || 0;
+                        total.carbs += parseFloat(meal.carbs) || 0;
+                        total.fat += parseFloat(meal.fat) || 0;
+                        
+                        // Estimate micronutrients based on meal type (simplified)
+                        total.fiber += (meal.calories || 0) * 0.014; // ~14g per 1000 cal
+                        total.sugar += (meal.calories || 0) * 0.025; // ~25g per 1000 cal
+                        total.sodium += (meal.calories || 0) * 0.5; // ~500mg per 1000 cal
+                        total.potassium += (meal.calories || 0) * 1.5; // ~1500mg per 1000 cal
+                        total.calcium += (meal.calories || 0) * 0.4; // ~400mg per 1000 cal
+                        total.iron += (meal.calories || 0) * 0.008; // ~8mg per 1000 cal
+                        total.vitaminC += (meal.calories || 0) * 0.045; // ~45mg per 1000 cal
+                        total.vitaminD += (meal.calories || 0) * 0.01; // ~10mcg per 1000 cal
+                        total.vitaminB12 += (meal.calories || 0) * 0.0012; // ~1.2mcg per 1000 cal
+                        total.folate += (meal.calories || 0) * 0.2; // ~200mcg per 1000 cal
+                        total.magnesium += (meal.calories || 0) * 0.2; // ~200mg per 1000 cal
+                        total.zinc += (meal.calories || 0) * 0.0055; // ~5.5mg per 1000 cal
+                    }
+                });
+                
+                return {
+                    calories: Math.round(total.calories),
+                    protein: Math.round(total.protein),
+                    carbs: Math.round(total.carbs),
+                    fat: Math.round(total.fat),
+                    fiber: Math.round(total.fiber),
+                    sugar: Math.round(total.sugar),
+                    sodium: Math.round(total.sodium),
+                    potassium: Math.round(total.potassium),
+                    calcium: Math.round(total.calcium),
+                    iron: Math.round(total.iron * 10) / 10,
+                    vitaminC: Math.round(total.vitaminC),
+                    vitaminD: Math.round(total.vitaminD * 10) / 10,
+                    vitaminB12: Math.round(total.vitaminB12 * 10) / 10,
+                    folate: Math.round(total.folate),
+                    magnesium: Math.round(total.magnesium),
+                    zinc: Math.round(total.zinc * 10) / 10
+                };
+            };
+
+            const generateDietPlan = (profile) => {
+                console.log("Generating diet plan for profile:", profile);
+                
+                const dailyCalories = calculateDailyCalories(profile);
+                console.log("Calculated daily calories:", dailyCalories);
+                
+                // Calorie distribution: 25% breakfast, 30% lunch, 35% dinner, 10% snack
+                const mealCalories = {
+                    Breakfast: Math.round(dailyCalories * 0.25),
+                    Lunch: Math.round(dailyCalories * 0.30),
+                    Dinner: Math.round(dailyCalories * 0.35),
+                    Snack: Math.round(dailyCalories * 0.10)
+                };
+                
+                // Base diet plan structure with portion sizes and calories
+                const basePlan = {
+                    Monday: {
+                        Breakfast: {
+                            name: "Greek Yogurt Bowl",
+                            portions: "1 cup Greek yogurt (170g), 1/2 cup mixed berries (75g), 1/4 cup granola (30g)",
+                            calories: mealCalories.Breakfast,
+                            protein: "25g",
+                            carbs: "35g",
+                            fat: "8g"
+                        },
+                        Lunch: {
+                            name: "Grilled Chicken Salad",
+                            portions: "150g grilled chicken breast, 2 cups mixed greens, 1/4 avocado, 1 tbsp olive oil",
+                            calories: mealCalories.Lunch,
+                            protein: "35g",
+                            carbs: "15g",
+                            fat: "18g"
+                        },
+                        Dinner: {
+                            name: "Baked Salmon with Quinoa",
+                            portions: "180g salmon fillet, 1/2 cup quinoa (dry), 1 cup steamed broccoli",
+                            calories: mealCalories.Dinner,
+                            protein: "40g",
+                            carbs: "45g",
+                            fat: "22g"
+                        },
+                        Snack: {
+                            name: "Apple with Almond Butter",
+                            portions: "1 medium apple, 1 tbsp almond butter",
+                            calories: mealCalories.Snack,
+                            protein: "4g",
+                            carbs: "20g",
+                            fat: "8g"
+                        }
+                    },
+                    Tuesday: {
+                        Breakfast: {
+                            name: "Oatmeal Power Bowl",
+                            portions: "1/2 cup rolled oats, 1 medium banana, 1 tbsp walnuts, 1 tbsp honey",
+                            calories: mealCalories.Breakfast,
+                            protein: "12g",
+                            carbs: "55g",
+                            fat: "8g"
+                        },
+                        Lunch: {
+                            name: "Turkey Avocado Wrap",
+                            portions: "2 slices whole grain bread, 100g turkey breast, 1/4 avocado, mixed greens",
+                            calories: mealCalories.Lunch,
+                            protein: "28g",
+                            carbs: "40g",
+                            fat: "16g"
+                        },
+                        Dinner: {
+                            name: "Beef Stir-Fry",
+                            portions: "120g lean beef, 1 cup brown rice (cooked), 1 cup mixed vegetables",
+                            calories: mealCalories.Dinner,
+                            protein: "35g",
+                            carbs: "50g",
+                            fat: "15g"
+                        },
+                        Snack: {
+                            name: "Greek Yogurt with Honey",
+                            portions: "1 cup Greek yogurt, 1 tbsp honey",
+                            calories: mealCalories.Snack,
+                            protein: "20g",
+                            carbs: "15g",
+                            fat: "0g"
+                        }
+                    },
+                    Wednesday: {
+                        Breakfast: {
+                            name: "Scrambled Eggs & Toast",
+                            portions: "3 large eggs, 1 slice whole grain toast, 1 cup spinach",
+                            calories: mealCalories.Breakfast,
+                            protein: "22g",
+                            carbs: "25g",
+                            fat: "18g"
+                        },
+                        Lunch: {
+                            name: "Quinoa Buddha Bowl",
+                            portions: "1 cup quinoa (cooked), 1/2 cup chickpeas, 1 cup mixed vegetables",
+                            calories: mealCalories.Lunch,
+                            protein: "20g",
+                            carbs: "60g",
+                            fat: "8g"
+                        },
+                        Dinner: {
+                            name: "Grilled Chicken & Sweet Potato",
+                            portions: "150g grilled chicken, 1 medium sweet potato, 1 cup green beans",
+                            calories: mealCalories.Dinner,
+                            protein: "38g",
+                            carbs: "45g",
+                            fat: "12g"
+                        },
+                        Snack: {
+                            name: "Mixed Nuts & Dried Fruit",
+                            portions: "15 almonds, 1 tbsp dried cranberries",
+                            calories: mealCalories.Snack,
+                            protein: "6g",
+                            carbs: "12g",
+                            fat: "14g"
+                        }
+                    },
+                    Thursday: {
+                        Breakfast: {
+                            name: "Protein Smoothie Bowl",
+                            portions: "1 scoop protein powder, 1/2 banana, 1/2 cup berries, 1 tbsp granola",
+                            calories: mealCalories.Breakfast,
+                            protein: "30g",
+                            carbs: "35g",
+                            fat: "5g"
+                        },
+                        Lunch: {
+                            name: "Lentil Soup & Bread",
+                            portions: "1.5 cups lentil soup, 1 slice whole grain bread",
+                            calories: mealCalories.Lunch,
+                            protein: "18g",
+                            carbs: "45g",
+                            fat: "6g"
+                        },
+                        Dinner: {
+                            name: "Baked Cod & Vegetables",
+                            portions: "200g cod fillet, 1 cup roasted vegetables, 1/2 cup brown rice",
+                            calories: mealCalories.Dinner,
+                            protein: "42g",
+                            carbs: "40g",
+                            fat: "8g"
+                        },
+                        Snack: {
+                            name: "Cottage Cheese & Berries",
+                            portions: "1/2 cup cottage cheese, 1/2 cup mixed berries",
+                            calories: mealCalories.Snack,
+                            protein: "15g",
+                            carbs: "12g",
+                            fat: "2g"
+                        }
+                    },
+                    Friday: {
+                        Breakfast: {
+                            name: "Avocado Toast & Egg",
+                            portions: "2 slices whole grain toast, 1/2 avocado, 2 poached eggs",
+                            calories: mealCalories.Breakfast,
+                            protein: "20g",
+                            carbs: "30g",
+                            fat: "25g"
+                        },
+                        Lunch: {
+                            name: "Chicken Caesar Salad",
+                            portions: "150g grilled chicken, 2 cups romaine, 1 tbsp Caesar dressing, 1 tbsp parmesan",
+                            calories: mealCalories.Lunch,
+                            protein: "32g",
+                            carbs: "8g",
+                            fat: "18g"
+                        },
+                        Dinner: {
+                            name: "Turkey Meatballs & Pasta",
+                            portions: "120g turkey meatballs, 1 cup whole wheat pasta, 1/2 cup marinara sauce",
+                            calories: mealCalories.Dinner,
+                            protein: "28g",
+                            carbs: "55g",
+                            fat: "12g"
+                        },
+                        Snack: {
+                            name: "Hummus & Vegetables",
+                            portions: "3 tbsp hummus, 1 cup mixed vegetables",
+                            calories: mealCalories.Snack,
+                            protein: "8g",
+                            carbs: "15g",
+                            fat: "10g"
+                        }
+                    },
+                    Saturday: {
+                        Breakfast: {
+                            name: "Protein Pancakes",
+                            portions: "2 protein pancakes, 1 tbsp maple syrup, 1/2 cup berries",
+                            calories: mealCalories.Breakfast,
+                            protein: "25g",
+                            carbs: "40g",
+                            fat: "8g"
+                        },
+                        Lunch: {
+                            name: "Fish Tacos",
+                            portions: "150g grilled fish, 2 corn tortillas, 1 cup cabbage slaw",
+                            calories: mealCalories.Lunch,
+                            protein: "30g",
+                            carbs: "35g",
+                            fat: "12g"
+                        },
+                        Dinner: {
+                            name: "Pork Tenderloin & Vegetables",
+                            portions: "150g pork tenderloin, 1 cup roasted vegetables, 1/2 cup quinoa",
+                            calories: mealCalories.Dinner,
+                            protein: "35g",
+                            carbs: "30g",
+                            fat: "15g"
+                        },
+                        Snack: {
+                            name: "Dark Chocolate & Almonds",
+                            portions: "2 squares dark chocolate, 10 almonds",
+                            calories: mealCalories.Snack,
+                            protein: "4g",
+                            carbs: "8g",
+                            fat: "12g"
+                        }
+                    },
+                    Sunday: {
+                        Breakfast: {
+                            name: "Protein Smoothie",
+                            portions: "1 scoop protein powder, 1 cup spinach, 1/2 banana, 1 cup almond milk",
+                            calories: mealCalories.Breakfast,
+                            protein: "28g",
+                            carbs: "25g",
+                            fat: "6g"
+                        },
+                        Lunch: {
+                            name: "Quinoa Salad",
+                            portions: "1 cup quinoa (cooked), 1/2 cup grilled vegetables, 1 tbsp olive oil",
+                            calories: mealCalories.Lunch,
+                            protein: "12g",
+                            carbs: "45g",
+                            fat: "12g"
+                        },
+                        Dinner: {
+                            name: "Baked Chicken & Sweet Potato",
+                            portions: "150g baked chicken, 1 medium sweet potato, 1 cup green beans",
+                            calories: mealCalories.Dinner,
+                            protein: "35g",
+                            carbs: "40g",
+                            fat: "10g"
+                        },
+                        Snack: {
+                            name: "Greek Yogurt Parfait",
+                            portions: "1 cup Greek yogurt, 1/4 cup granola, 1/2 cup berries",
+                            calories: mealCalories.Snack,
+                            protein: "20g",
+                            carbs: "25g",
+                            fat: "5g"
+                        }
+                    }
+                };
+
+                // Personalize based on user profile
+                if (profile) {
+                    // Adjust for weight goals
+                    if (profile.weight_goal === 'lose') {
+                        // Reduce portions and add more vegetables
+                        Object.keys(basePlan).forEach(day => {
+                            Object.keys(basePlan[day]).forEach(meal => {
+                                if (meal === 'Snack') {
+                                    basePlan[day][meal] = {
+                                        ...basePlan[day][meal],
+                                        name: "Vegetable Sticks with Hummus",
+                                        portions: "1 cup mixed vegetables, 2 tbsp hummus",
+                                        calories: Math.round(mealCalories.Snack * 0.8),
+                                        protein: "6g",
+                                        carbs: "15g",
+                                        fat: "8g"
+                                    };
+                                } else {
+                                    // Reduce calories by 10% for weight loss
+                                    basePlan[day][meal] = {
+                                        ...basePlan[day][meal],
+                                        calories: Math.round(basePlan[day][meal].calories * 0.9)
+                                    };
+                                }
+                            });
+                        });
+                    } else if (profile.weight_goal === 'gain') {
+                        // Add more protein and healthy fats
+                        Object.keys(basePlan).forEach(day => {
+                            Object.keys(basePlan[day]).forEach(meal => {
+                                if (meal === 'Snack') {
+                                    basePlan[day][meal] = {
+                                        ...basePlan[day][meal],
+                                        name: "Protein Shake with Banana",
+                                        portions: "1 scoop protein powder, 1 banana, 1 cup almond milk",
+                                        calories: Math.round(mealCalories.Snack * 1.2),
+                                        protein: "25g",
+                                        carbs: "30g",
+                                        fat: "5g"
+                                    };
+                                } else {
+                                    // Increase calories by 10% for weight gain
+                                    basePlan[day][meal] = {
+                                        ...basePlan[day][meal],
+                                        calories: Math.round(basePlan[day][meal].calories * 1.1)
+                                    };
+                                }
+                            });
+                        });
+                    }
+
+                    // Adjust for activity level
+                    if (profile.activity_level === 'high' || profile.exercise_frequency > 4) {
+                        // Add more carbs and protein for active users
+                        Object.keys(basePlan).forEach(day => {
+                            basePlan[day].Snack = {
+                                ...basePlan[day].Snack,
+                                name: basePlan[day].Snack.name + " + Energy Bar",
+                                portions: basePlan[day].Snack.portions + ", 1 energy bar",
+                                calories: Math.round(basePlan[day].Snack.calories * 1.3),
+                                protein: (parseInt(basePlan[day].Snack.protein) + 8).toString() + "g",
+                                carbs: (parseInt(basePlan[day].Snack.carbs) + 20).toString() + "g",
+                                fat: (parseInt(basePlan[day].Snack.fat) + 3).toString() + "g"
+                            };
+                        });
+                    }
+
+                    // Adjust for dietary restrictions
+                    if (profile.dietary_restrictions && profile.dietary_restrictions.includes('vegetarian')) {
+                        Object.keys(basePlan).forEach(day => {
+                            // Replace meat with plant-based alternatives
+                            Object.keys(basePlan[day]).forEach(meal => {
+                                const mealData = basePlan[day][meal];
+                                mealData.name = mealData.name.replace(/chicken|turkey|beef|pork|salmon|cod|fish/gi, (match) => {
+                                    const replacements = {
+                                        'chicken': 'tofu',
+                                        'turkey': 'tempeh', 
+                                        'beef': 'lentils',
+                                        'pork': 'beans',
+                                        'salmon': 'lentils',
+                                        'cod': 'chickpeas',
+                                        'fish': 'tofu'
+                                    };
+                                    return replacements[match.toLowerCase()] || match;
+                                });
+                                mealData.portions = mealData.portions.replace(/chicken|turkey|beef|pork|salmon|cod|fish/gi, (match) => {
+                                    const replacements = {
+                                        'chicken': 'tofu',
+                                        'turkey': 'tempeh',
+                                        'beef': 'lentils', 
+                                        'pork': 'beans',
+                                        'salmon': 'lentils',
+                                        'cod': 'chickpeas',
+                                        'fish': 'tofu'
+                                    };
+                                    return replacements[match.toLowerCase()] || match;
+                                });
+                            });
+                        });
+                    }
+                }
+
+                return basePlan;
+            };
+
+            const loadUserData = async () => {
+                try {
+                    console.log("Loading user data...");
+                    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                    console.log("Current user from localStorage:", currentUser);
+                    
+                    if (!currentUser.id) {
+                        console.log("No user found, redirecting to auth");
+                        window.location.href = 'auth.html';
+                        return;
+                    }
+
+                    setUser(currentUser);
+                    console.log("User set:", currentUser);
+
+                    // Load health profile
+                    console.log("Loading health profile...");
+                    const response = await fetch(`http://localhost:8000/users/${currentUser.id}/health-profile`);
+                    console.log("Health profile response:", response.status);
+                    
+                    if (response.ok) {
+                        const profile = await response.json();
+                        console.log("Health profile loaded:", profile);
+                        setHealthProfile(profile);
+                        
+                        // Generate personalized diet plan
+                        const plan = generateDietPlan(profile);
+                        console.log("Generated diet plan:", plan);
+                        setDietPlan(plan);
+                    } else {
+                        console.log("Health profile not found");
+                    }
+                } catch (error) {
+                    console.error('Error loading user data:', error);
+                    setError(error.message);
+                } finally {
+                    setIsLoading(false);
+                    console.log("Loading complete");
+                }
+            };
+
+            const openChatForMeal = (day, meal) => {
+                console.log(`Opening chat for ${meal} on ${day}`);
+                const currentMeal = dietPlan && dietPlan[day] ? dietPlan[day][meal] : null;
+                const currentMealText = currentMeal ? 
+                    `${currentMeal.name}\n${currentMeal.portions}\nCalories: ${currentMeal.calories}` : 
+                    'No meal planned';
+                
+                const newMeal = prompt(`Current ${meal} on ${day}:\n${currentMealText}\n\nEnter a new meal suggestion:`, currentMealText);
+                
+                if (newMeal && newMeal !== currentMealText) {
+                    // For now, create a simple meal structure
+                    const newMealData = {
+                        name: newMeal.split('\n')[0] || newMeal,
+                        portions: newMeal.split('\n')[1] || "Portion details not specified",
+                        calories: currentMeal ? currentMeal.calories : 300,
+                        protein: currentMeal ? currentMeal.protein : "15g",
+                        carbs: currentMeal ? currentMeal.carbs : "30g",
+                        fat: currentMeal ? currentMeal.fat : "10g"
+                    };
+                    
+                    // Update the diet plan
+                    setDietPlan(prev => ({
+                        ...prev,
+                        [day]: {
+                            ...prev[day],
+                            [meal]: newMealData
+                        }
+                    }));
+                    console.log(`Updated ${meal} on ${day} to:`, newMealData);
+                }
+            };
+
+            const sendChatMessage = async () => {
+                if (!chatMessage.trim()) return;
+                
+                setIsChatLoading(true);
+                const userMessage = chatMessage.trim();
+                setChatMessage('');
+                
+                // Add user message to chat history
+                const newUserMessage = {
+                    id: Date.now(),
+                    type: 'user',
+                    content: userMessage,
+                    timestamp: new Date()
+                };
+                setChatHistory(prev => [...prev, newUserMessage]);
+                
+                try {
+                    console.log("Sending chat message:", userMessage);
+                    
+                    // Send to AI chat endpoint
+                    const response = await fetch('http://localhost:8000/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: userMessage,
+                            user_id: user.id,
+                            health_profile: healthProfile,
+                            current_diet_plan: dietPlan
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log("AI response:", data);
+                    
+                    // Add AI response to chat history
+                    const aiMessage = {
+                        id: Date.now() + 1,
+                        type: 'ai',
+                        content: data.response,
+                        timestamp: new Date()
+                    };
+                    setChatHistory(prev => [...prev, aiMessage]);
+                    
+                    // Check if the AI wants to modify the diet plan
+                    if (data.diet_plan_modifications) {
+                        console.log("Applying diet plan modifications:", data.diet_plan_modifications);
+                        setDietPlan(prev => ({
+                            ...prev,
+                            ...data.diet_plan_modifications
+                        }));
+                    }
+                    
+                } catch (error) {
+                    console.error('Error sending chat message:', error);
+                    const errorMessage = {
+                        id: Date.now() + 1,
+                        type: 'ai',
+                        content: `Sorry, I encountered an error: ${error.message}. Please try again.`,
+                        timestamp: new Date()
+                    };
+                    setChatHistory(prev => [...prev, errorMessage]);
+                } finally {
+                    setIsChatLoading(false);
+                }
+            };
+
+            if (error) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                        <div className="text-center">
+                            <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
+                            <p className="text-gray-600">{error}</p>
+                            <button 
+                                onClick={() => window.location.reload()}
+                                className="mt-4 bg-blue-600 text-white px-4 py-2 rounded"
+                            >
+                                Reload
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (isLoading) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                            <p className="text-gray-600">Loading dashboard...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-100">
+                    <div className="bg-white shadow-sm border-b p-4">
+                        <h1 className="text-2xl font-bold text-gray-900">Nutrition AI Dashboard</h1>
+                        <p className="text-gray-600">Welcome, {user ? user.username : 'User'}!</p>
+                    </div>
+                    
+                    <div className="p-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Column 1: Meals */}
+                            <div>
+                                {/* View Mode Toggle */}
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="flex space-x-2">
+                                        <button
+                                            onClick={() => setViewMode('daily')}
+                                            className={`px-4 py-2 rounded-lg font-medium ${
+                                                viewMode === 'daily' 
+                                                    ? 'bg-blue-600 text-white' 
+                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            Today's Meals
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode('weekly')}
+                                            className={`px-4 py-2 rounded-lg font-medium ${
+                                                viewMode === 'weekly' 
+                                                    ? 'bg-blue-600 text-white' 
+                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            Weekly View
+                                        </button>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-sm text-gray-500">Daily Target</div>
+                                        <div className="text-lg font-bold text-blue-600">
+                                            {dietPlan ? calculateDailyCalories(healthProfile) : 0} calories
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Daily View */}
+                                {viewMode === 'daily' && (
+                                    <div className="space-y-6">
+                                        {/* Day Selector */}
+                                        <div className="bg-white rounded-lg shadow p-4">
+                                            <h3 className="text-lg font-semibold mb-4">Select Day</h3>
+                                            <div className="grid grid-cols-7 gap-2">
+                                                {days.map(day => (
+                                                    <button
+                                                        key={day}
+                                                        onClick={() => setSelectedDay(day)}
+                                                        className={`p-3 rounded-lg text-sm font-medium ${
+                                                            selectedDay === day
+                                                                ? 'bg-blue-600 text-white'
+                                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                        }`}
+                                                    >
+                                                        {day.substring(0, 3)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+
+                                        {/* Today's Meals - Ultra Compact */}
+                                        <div className="space-y-2">
+                                            {meals.map(meal => {
+                                                const mealData = dietPlan && dietPlan[selectedDay] ? dietPlan[selectedDay][meal] : null;
+                                                return (
+                                                    <div key={meal} className="bg-white rounded-lg shadow p-3 hover:shadow-md transition-shadow">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <h3 className="text-base font-bold text-gray-900">{meal}</h3>
+                                                            <div className="text-right">
+                                                                <div className="text-lg font-bold text-blue-600">{mealData?.calories || 0}</div>
+                                                                <div className="text-xs text-gray-500">cal</div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {mealData ? (
+                                                            <div className="space-y-2">
+                                                                <div>
+                                                                    <h4 className="font-semibold text-gray-900 mb-1 text-xs">{mealData.name}</h4>
+                                                                    <div className="space-y-0.5">
+                                                                        {mealData.portions.split(', ').map((ingredient, index) => (
+                                                                            <div key={index} className="flex items-center text-gray-700">
+                                                                                <div className="w-1 h-1 bg-blue-500 rounded-full mr-1.5 flex-shrink-0"></div>
+                                                                                <span className="text-xs">{ingredient.trim()}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <div className="grid grid-cols-3 gap-1.5">
+                                                                    <div className="text-center bg-red-50 rounded p-1.5">
+                                                                        <div className="text-xs font-bold text-red-600">{mealData.protein}</div>
+                                                                        <div className="text-xs text-gray-600">P</div>
+                                                                    </div>
+                                                                    <div className="text-center bg-yellow-50 rounded p-1.5">
+                                                                        <div className="text-xs font-bold text-yellow-600">{mealData.carbs}</div>
+                                                                        <div className="text-xs text-gray-600">C</div>
+                                                                    </div>
+                                                                    <div className="text-center bg-green-50 rounded p-1.5">
+                                                                        <div className="text-xs font-bold text-green-600">{mealData.fat}</div>
+                                                                        <div className="text-xs text-gray-600">F</div>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <button
+                                                                    onClick={() => openChatForMeal(selectedDay, meal)}
+                                                                    className="w-full bg-blue-600 text-white py-1.5 px-2 rounded text-xs hover:bg-blue-700 transition-colors"
+                                                                >
+                                                                    Modify
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center py-2 text-gray-500">
+                                                                <div className="text-xs mb-1">No meal planned</div>
+                                                                <button
+                                                                    onClick={() => openChatForMeal(selectedDay, meal)}
+                                                                    className="bg-blue-600 text-white py-1 px-2 rounded text-xs hover:bg-blue-700"
+                                                                >
+                                                                    Add Meal
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Weekly View */}
+                                {viewMode === 'weekly' && (
+                                    <div className="bg-white rounded-lg shadow p-6">
+                                        <h2 className="text-xl font-semibold mb-4">Weekly Overview</h2>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead>
+                                                    <tr>
+                                                        <th className="text-left p-2">Day</th>
+                                                        {meals.map(meal => (
+                                                            <th key={meal} className="text-left p-2">{meal}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {days.map(day => (
+                                                        <tr key={day}>
+                                                            <td className="p-2 font-medium">{day}</td>
+                                                            {meals.map(meal => {
+                                                                const mealData = dietPlan && dietPlan[day] ? dietPlan[day][meal] : null;
+                                                                return (
+                                                                    <td key={meal} className="p-2">
+                                                                        <div className="bg-gray-50 p-3 rounded border hover:bg-gray-100 cursor-pointer"
+                                                                             onClick={() => {
+                                                                                 setSelectedDay(day);
+                                                                                 setViewMode('daily');
+                                                                             }}>
+                                                                            {mealData ? (
+                                                                                <>
+                                                                                    <div className="text-sm font-medium text-gray-900 mb-1">
+                                                                                        {mealData.name}
+                                                                                    </div>
+                                                                                    <div className="text-xs text-gray-500">
+                                                                                        {mealData.calories} cal
+                                                                                    </div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <div className="text-sm text-gray-400">
+                                                                                    No meal
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Column 2: Detailed Nutrition Breakdown - Ultra Compact */}
+                            <div>
+                                {dietPlan && healthProfile && (
+                                    <div className="bg-white rounded-lg shadow p-3">
+                                        <h3 className="text-base font-semibold mb-3">Daily Nutrition - {selectedDay}</h3>
+                                        {(() => {
+                                            const dayNutrition = calculateDayNutrition(dietPlan, selectedDay);
+                                            const targets = calculateDailyTargets(healthProfile);
+                                            
+                                            if (!dayNutrition) return <div className="text-gray-500 text-xs">No data</div>;
+                                            
+                                            const getProgressColor = (current, target) => {
+                                                const percentage = (current / target) * 100;
+                                                if (percentage >= 100) return 'bg-green-500';
+                                                if (percentage >= 80) return 'bg-yellow-500';
+                                                if (percentage >= 60) return 'bg-orange-500';
+                                                return 'bg-red-500';
+                                            };
+                                            
+                                            const getTextColor = (current, target) => {
+                                                const percentage = (current / target) * 100;
+                                                if (percentage >= 100) return 'text-green-600';
+                                                if (percentage >= 80) return 'text-yellow-600';
+                                                if (percentage >= 60) return 'text-orange-600';
+                                                return 'text-red-600';
+                                            };
+                                            
+                                            const macroItems = [
+                                                { name: 'Calories', current: dayNutrition.calories, target: targets.calories, unit: 'cal' },
+                                                { name: 'Protein', current: dayNutrition.protein, target: targets.protein, unit: 'g' },
+                                                { name: 'Carbs', current: dayNutrition.carbs, target: targets.carbs, unit: 'g' },
+                                                { name: 'Fat', current: dayNutrition.fat, target: targets.fat, unit: 'g' },
+                                                { name: 'Fiber', current: dayNutrition.fiber, target: targets.fiber, unit: 'g' },
+                                                { name: 'Sugar', current: dayNutrition.sugar, target: targets.sugar, unit: 'g' }
+                                            ];
+                                            
+                                            const microItems = [
+                                                { name: 'Sodium', current: dayNutrition.sodium, target: targets.sodium, unit: 'mg' },
+                                                { name: 'Potassium', current: dayNutrition.potassium, target: targets.potassium, unit: 'mg' },
+                                                { name: 'Calcium', current: dayNutrition.calcium, target: targets.calcium, unit: 'mg' },
+                                                { name: 'Iron', current: dayNutrition.iron, target: targets.iron, unit: 'mg' },
+                                                { name: 'Vit C', current: dayNutrition.vitaminC, target: targets.vitaminC, unit: 'mg' },
+                                                { name: 'Vit D', current: dayNutrition.vitaminD, target: targets.vitaminD, unit: 'mcg' },
+                                                { name: 'B12', current: dayNutrition.vitaminB12, target: targets.vitaminB12, unit: 'mcg' },
+                                                { name: 'Folate', current: dayNutrition.folate, target: targets.folate, unit: 'mcg' },
+                                                { name: 'Mg', current: dayNutrition.magnesium, target: targets.magnesium, unit: 'mg' },
+                                                { name: 'Zn', current: dayNutrition.zinc, target: targets.zinc, unit: 'mg' }
+                                            ];
+                                            
+                                            return (
+                                                <div className="space-y-3">
+                                                    {/* Macronutrients - Compact */}
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900 mb-2 text-sm">Macros</h4>
+                                                        <div className="space-y-1.5">
+                                                            {macroItems.map(item => {
+                                                                const percentage = Math.min((item.current / item.target) * 100, 100);
+                                                                return (
+                                                                    <div key={item.name} className="bg-gray-50 rounded p-2">
+                                                                        <div className="flex justify-between items-center mb-1">
+                                                                            <span className="text-xs font-medium text-gray-700">{item.name}</span>
+                                                                            <span className={`text-xs font-bold ${getTextColor(item.current, item.target)}`}>
+                                                                                {item.current}/{item.target} {item.unit}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="w-full bg-gray-200 rounded-full h-1">
+                                                                            <div 
+                                                                                className={`h-1 rounded-full ${getProgressColor(item.current, item.target)}`}
+                                                                                style={{ width: `${percentage}%` }}
+                                                                            ></div>
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-500 mt-0.5">
+                                                                            {percentage.toFixed(0)}%
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Micronutrients - Ultra Compact */}
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900 mb-2 text-sm">Micros</h4>
+                                                        <div className="grid grid-cols-2 gap-1">
+                                                            {microItems.map(item => {
+                                                                const percentage = Math.min((item.current / item.target) * 100, 100);
+                                                                return (
+                                                                    <div key={item.name} className="bg-gray-50 rounded p-1.5">
+                                                                        <div className="flex justify-between items-center mb-0.5">
+                                                                            <span className="text-xs font-medium text-gray-700">{item.name}</span>
+                                                                            <span className={`text-xs font-bold ${getTextColor(item.current, item.target)}`}>
+                                                                                {item.current}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="w-full bg-gray-200 rounded-full h-0.5">
+                                                                            <div 
+                                                                                className={`h-0.5 rounded-full ${getProgressColor(item.current, item.target)}`}
+                                                                                style={{ width: `${percentage}%` }}
+                                                                            ></div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Summary Stats - Compact */}
+                                                    <div className="bg-blue-50 rounded p-2">
+                                                        <h4 className="font-semibold text-blue-900 mb-2 text-sm">Summary</h4>
+                                                        <div className="grid grid-cols-2 gap-2 text-center">
+                                                            <div>
+                                                                <div className="text-lg font-bold text-blue-600">{dayNutrition.calories}</div>
+                                                                <div className="text-xs text-blue-700">Calories</div>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-lg font-bold text-red-600">{dayNutrition.protein}g</div>
+                                                                <div className="text-xs text-red-700">Protein</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Column 3: User Profile & Chat - Ultra Compact */}
+                            <div className="space-y-2">
+                                <div className="bg-white rounded-lg shadow p-3">
+                                    <h3 className="text-base font-semibold mb-2">Profile</h3>
+                                    <div className="space-y-1 text-xs">
+                                        <p><span className="font-medium">Name:</span> {user ? user.username : 'N/A'}</p>
+                                        <p><span className="font-medium">Email:</span> {user ? user.email : 'N/A'}</p>
+                                        {healthProfile && (
+                                            <>
+                                                <p><span className="font-medium">Age:</span> {healthProfile.age || 'N/A'}</p>
+                                                <p><span className="font-medium">Gender:</span> {healthProfile.gender || 'N/A'}</p>
+                                                <p><span className="font-medium">Height:</span> {healthProfile.height_cm || 'N/A'} cm</p>
+                                                <p><span className="font-medium">Weight:</span> {healthProfile.weight_kg || 'N/A'} kg</p>
+                                                <p><span className="font-medium">Activity:</span> {healthProfile.activity_level || 'N/A'}</p>
+                                                <p><span className="font-medium">Goal:</span> {healthProfile.weight_goal || 'N/A'}</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="bg-white rounded-lg shadow p-3">
+                                    <h3 className="text-base font-semibold mb-2">AI Chat</h3>
+                                    
+                                    {/* Chat History - Ultra Compact */}
+                                    <div className="h-24 overflow-y-auto mb-2 space-y-1">
+                                        {chatHistory.map((message) => (
+                                            <div
+                                                key={message.id}
+                                                className={`p-1.5 rounded text-xs ${
+                                                    message.type === 'user'
+                                                        ? 'bg-blue-100 ml-2'
+                                                        : 'bg-gray-100 mr-2'
+                                                }`}
+                                            >
+                                                <div className="text-xs font-medium text-gray-700 mb-0.5">
+                                                    {message.type === 'user' ? 'You' : 'AI'}
+                                                </div>
+                                                <div className="text-xs text-gray-900 whitespace-pre-wrap">
+                                                    {message.content}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {isChatLoading && (
+                                            <div className="p-1.5 bg-gray-100 rounded mr-2">
+                                                <div className="text-xs text-gray-600">AI is thinking...</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Chat Input - Ultra Compact */}
+                                    <div className="space-y-1">
+                                        <textarea
+                                            value={chatMessage}
+                                            onChange={(e) => setChatMessage(e.target.value)}
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    sendChatMessage();
+                                                }
+                                            }}
+                                            placeholder="Ask about meals..."
+                                            className="w-full p-1.5 border rounded text-xs resize-none"
+                                            rows="1"
+                                            disabled={isChatLoading}
+                                        />
+                                        <button
+                                            onClick={sendChatMessage}
+                                            disabled={isChatLoading || !chatMessage.trim()}
+                                            className="w-full bg-blue-600 text-white py-1 px-2 rounded text-xs hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                        >
+                                            {isChatLoading ? 'Sending...' : 'Send'}
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('Are you sure you want to reset everything? This will delete all your data and start the questionnaire over.')) {
+                                                localStorage.removeItem('currentUser');
+                                                window.location.href = 'structured_onboarding.html';
+                                            }
+                                        }}
+                                        className="w-full bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700"
+                                    >
+                                        Reset All Data
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        console.log("About to render Dashboard...");
+        try {
+            ReactDOM.render(<Dashboard />, document.getElementById('root'));
+            console.log("Dashboard rendered successfully");
+        } catch (error) {
+            console.error("Error rendering Dashboard:", error);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 20px; color: red;">
+                    <h1>Render Error</h1>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

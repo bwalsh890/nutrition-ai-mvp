@@ -1,8 +1,13 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List
 import uvicorn
+import logging
+import time
+import json
+from datetime import datetime
 
 from database import get_db, engine
 from models import Base
@@ -19,6 +24,16 @@ from crud import (create_user, get_user, get_users, update_user, delete_user, ch
                  create_habit_log, update_habit_log, delete_habit_log, calculate_daily_progress, calculate_weekly_progress, 
                  calculate_monthly_progress, generate_feedback)
 from openai_service import get_openai_service
+from onboarding_service import OnboardingChatService
+from ai_profiling_service import AIProfilingService
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize onboarding service
+onboarding_service = OnboardingChatService()
+ai_profiling_service = AIProfilingService()
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -37,6 +52,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    logger.info(f"{request.method} {request.url} - {response.status_code} - {process_time:.3f}s")
+    return response
 
 @app.get("/")
 async def root():
@@ -78,11 +111,19 @@ async def delete_user_endpoint(user_id: int, db: Session = Depends(get_db)):
     return {"message": "User deleted successfully"}
 
 # Chat endpoint
-@app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(chat_request: ChatRequest, db: Session = Depends(get_db)):
+@app.post("/chat")
+async def chat_endpoint(request: dict, db: Session = Depends(get_db)):
     try:
+        user_id = request.get("user_id")
+        message = request.get("message")
+        health_profile = request.get("health_profile", {})
+        current_diet_plan = request.get("current_diet_plan", {})
+        
+        if not user_id or not message:
+            raise HTTPException(status_code=400, detail="user_id and message are required")
+        
         # Check message limit for user
-        is_within_limit, current_count, remaining = check_message_limit(db, chat_request.user_id, limit=50)
+        is_within_limit, current_count, remaining = check_message_limit(db, user_id, limit=50)
         
         if not is_within_limit:
             raise HTTPException(
@@ -90,31 +131,63 @@ async def chat_endpoint(chat_request: ChatRequest, db: Session = Depends(get_db)
                 detail=f"Message limit exceeded. You have used {current_count}/50 messages this month. Please try again next month."
             )
         
-        # Get user's health profile for personalized advice
-        health_profile = get_health_profile_for_ai(db, chat_request.user_id)
-        
         # Get OpenAI service
         openai_service = get_openai_service()
         
-        # Get response from OpenAI with health context
+        # Create enhanced context for diet plan modifications
+        diet_context = f"""
+        Current diet plan: {json.dumps(current_diet_plan, indent=2)}
+        User health profile: {json.dumps(health_profile, indent=2)}
+        
+        The user can ask for diet modifications like:
+        - "Make it paleo"
+        - "Make it 2000 calories per day"
+        - "Make it vegetarian"
+        - "Add more protein"
+        - "Reduce carbs"
+        
+        If the user requests diet modifications, respond with a JSON object containing:
+        {{
+            "response": "Your conversational response to the user",
+            "diet_plan_modifications": {{
+                "Monday": {{"Breakfast": "new meal", "Lunch": "new meal", ...}},
+                "Tuesday": {{"Breakfast": "new meal", "Lunch": "new meal", ...}},
+                ...
+            }}
+        }}
+        
+        If no diet modifications are needed, just respond normally without the diet_plan_modifications field.
+        """
+        
+        # Get response from OpenAI with enhanced context
         response = await openai_service.chat_completion(
-            message=chat_request.message,
-            conversation_history=chat_request.conversation_history,
+            message=f"{diet_context}\n\nUser message: {message}",
+            conversation_history=[],
             health_profile=health_profile
         )
         
         # Increment message count after successful API call
-        increment_message_count(db, chat_request.user_id)
+        increment_message_count(db, user_id)
         
-        # Update conversation history
-        updated_history = chat_request.conversation_history.copy()
-        updated_history.append(ChatMessage(role="user", content=chat_request.message))
-        updated_history.append(ChatMessage(role="assistant", content=response))
+        # Try to parse JSON response for diet modifications
+        try:
+            # Look for JSON in the response
+            import re
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                parsed_response = json.loads(json_match.group())
+                return {
+                    "response": parsed_response.get("response", response),
+                    "diet_plan_modifications": parsed_response.get("diet_plan_modifications")
+                }
+        except:
+            pass
         
-        return ChatResponse(
-            response=response,
-            conversation_history=updated_history
-        )
+        # If no JSON found, return normal response
+        return {
+            "response": response,
+            "diet_plan_modifications": None
+        }
         
     except HTTPException:
         raise
@@ -619,6 +692,156 @@ async def get_feedback(user_id: int, habit_type: str, days: int = 7, db: Session
         raise HTTPException(status_code=404, detail=feedback["error"])
     
     return FeedbackResponse(**feedback)
+
+# Onboarding chat endpoints
+@app.post("/onboarding-chat")
+async def onboarding_chat(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """Handle onboarding chat conversation"""
+    try:
+        # Extract parameters from request body
+        user_id = request.get("user_id")
+        message = request.get("message")
+        session_data = request.get("session_data")
+        
+        # Initialize session data if not provided
+        if session_data is None:
+            session_data = {
+                "current_question_id": 0,
+                "waiting_for_follow_up": False,
+                "collected_data": {},
+                "started_at": datetime.now().isoformat()
+            }
+        
+        # Process the user's response
+        updated_session, ai_response = onboarding_service.process_response(
+            session_data, message
+        )
+        
+        # Check if onboarding is complete
+        is_complete = (
+            updated_session.get("current_question_id", 0) >= len(onboarding_service.questions)
+        )
+        
+        if is_complete:
+            # Build comprehensive user profile
+            collected_data = updated_session.get("collected_data", {})
+            user_profile = onboarding_service.build_user_profile(collected_data)
+            profile_summary = onboarding_service.get_profile_summary(collected_data)
+            diet_recommendations = onboarding_service.get_diet_recommendations(collected_data)
+            
+            # Log the profile for debugging
+            logger.info(f"User Profile Built: {profile_summary}")
+            logger.info(f"Diet Recommendations: {diet_recommendations}")
+            
+            # Save profile data to database (simplified for now)
+            questionnaire_data = {
+                "sleep_hours": 8,  # Default
+                "water_goal_ml": 2000,  # Default
+                "meal_frequency": 3,  # Default
+                "exercise_frequency": 3,  # Default
+                "exercise_duration": 30,  # Default
+                "stress_level": "moderate",  # Default
+                "energy_level": user_profile.get("current_energy_level", "medium"),
+                "weight_goal": "maintain",  # Default
+                "target_weight_kg": float(user_profile.get("weight_kg", 70))
+            }
+            
+            # Save to database
+            try:
+                create_user_questionnaire(db, user_id, questionnaire_data)
+                logger.info(f"Questionnaire saved for user {user_id}")
+            except Exception as e:
+                logger.error(f"Error saving questionnaire: {e}")
+        
+        return {
+            "response": ai_response,
+            "session_data": updated_session,
+            "is_complete": is_complete,
+            "progress": {
+                "current_question": updated_session.get("current_question_id", 0) + 1,
+                "total_questions": len(onboarding_service.questions),
+                "percentage": ((updated_session.get("current_question_id", 0) + 1) / len(onboarding_service.questions)) * 100
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in onboarding chat: {e}")
+        return {"error": "Sorry, I encountered an error. Please try again."}
+
+@app.post("/start-onboarding/{user_id}")
+async def start_onboarding(user_id: int):
+    """Start the onboarding process"""
+    first_question = onboarding_service.get_next_question({
+        "current_question_id": 0,
+        "waiting_for_follow_up": False,
+        "collected_data": {}
+    })
+    
+    return {
+        "message": "Hi! I'm here to help you discover your personalized nutrition path. This conversation will help me understand what matters most to you and build a plan that truly fits your life.",
+        "question": first_question["question"],
+        "session_data": {
+            "current_question_id": 0,
+            "waiting_for_follow_up": False,
+            "collected_data": {},
+            "started_at": datetime.now().isoformat()
+        }
+    }
+
+# AI Profiling endpoints
+@app.post("/start-ai-profiling/{user_id}")
+async def start_ai_profiling(user_id: int):
+    """Start the AI-driven profiling process"""
+    try:
+        result = await ai_profiling_service.start_profiling(user_id)
+        return result
+    except Exception as e:
+        logger.error(f"Error starting AI profiling: {e}")
+        return {"error": "Sorry, I encountered an error starting the profiling process."}
+
+@app.post("/ai-profiling-chat")
+async def ai_profiling_chat(request: dict):
+    """Handle AI profiling conversation"""
+    try:
+        user_id = request.get("user_id")
+        message = request.get("message")
+        session_data = request.get("session_data")
+        
+        if not user_id or not message or not session_data:
+            raise HTTPException(status_code=400, detail="user_id, message, and session_data are required")
+        
+        result = await ai_profiling_service.process_user_response(session_data, message)
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in AI profiling chat: {e}")
+        return {"error": "Sorry, I encountered an error. Please try again."}
+
+@app.post("/build-meal-plan/{user_id}")
+async def build_meal_plan(user_id: int, request: dict):
+    """Build personalized meal plan from completed profile"""
+    try:
+        profile_data = request.get("profile_data")
+        if not profile_data:
+            raise HTTPException(status_code=400, detail="profile_data is required")
+        
+        meal_plan = ai_profiling_service.build_meal_plan(profile_data)
+        
+        return {
+            "meal_plan": meal_plan,
+            "message": "Your personalized meal plan is ready! 🎯"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error building meal plan: {e}")
+        return {"error": "Sorry, I encountered an error building your meal plan."}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
